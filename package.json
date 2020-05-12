@@ -24,10 +24,10 @@
   "_spec": "node-red-contrib-oracledb-mod@0.5.6",
   "_where": "/home/srv/node-red-linux",
   "author": {
-    "name": "Ab Reitsma"
+    "name": "Original: Ab Reitsma, Maintainer: Vinay Tulluru"
   },
   "bugs": {
-    "url": "https://github.com/abreits/node-red-contrib-oracledb/issues"
+    "url": "https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues"
   },
   "bundleDependencies": false,
   "dependencies": {

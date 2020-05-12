@@ -39,11 +39,15 @@ This is a Node-Red Oracle database input/output node. The function it provides d
 
 
 ## Known issues     <a name="knownissues"></a>
-
 - none
 
-
 ## What's new     <a name="whatsnew"></a>
+
+### version 0.5.7
+Fixed an issue with initializing bug which cause nod-red to crash
+- Dependencies updated as below
+  source-map-support  ^0.5.16  →  ^0.5.19
+  tslint               ^6.1.0  →   ^6.1.2
 
 ### version 0.5.6
 - Dependencies updated as below
