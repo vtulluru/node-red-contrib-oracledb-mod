@@ -1,35 +1,8 @@
 {
-  "_from": "node-red-contrib-oracledb-mod@0.5.6",
-  "_id": "node-red-contrib-oracledb-mod@0.5.6",
-  "_inBundle": false,
-  "_integrity": "sha512-wD6PA/meP7dQeDoyOjvEZjY9vjUHE+fXqmO7KY5ug36ZGsTqUYD2ry1LSQfs8pPmywtCNQ+R3KUdB1fTP8/1aQ==",
-  "_location": "/node-red-contrib-oracledb-mod",
-  "_phantomChildren": {},
-  "_requested": {
-    "type": "version",
-    "registry": true,
-    "raw": "node-red-contrib-oracledb-mod@0.5.6",
-    "name": "node-red-contrib-oracledb-mod",
-    "escapedName": "node-red-contrib-oracledb-mod",
-    "rawSpec": "0.5.6",
-    "saveSpec": null,
-    "fetchSpec": "0.5.6"
-  },
-  "_requiredBy": [
-    "#USER",
-    "/"
-  ],
-  "_resolved": "https://registry.npmjs.org/node-red-contrib-oracledb-mod/-/node-red-contrib-oracledb-mod-0.5.6.tgz",
-  "_shasum": "9e66adc471fd32c6e5d2fcd90521e74a33bcdc92",
-  "_spec": "node-red-contrib-oracledb-mod@0.5.6",
-  "_where": "/home/srv/node-red-linux",
-  "author": {
-    "name": "Original: Ab Reitsma, Maintainer: Vinay Tulluru"
-  },
+  "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru",
   "bugs": {
     "url": "https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues"
   },
-  "bundleDependencies": false,
   "dependencies": {
     "object-resolve-path": "^1.1.1",
     "oracledb": "^4.2.0"
@@ -54,7 +27,7 @@
   "directories": {
     "lib": "lib"
   },
-  "homepage": "pwd",
+  "homepage": "https://github.com/vtulluru/node-red-contrib-oracledb-mod#readme",
   "keywords": [
     "node-red",
     "oracle",
