@@ -119,18 +119,19 @@ RED.nodes.registerType("oracledb", {
                 mappingsEditor.resize();
             }
         }
-        $("#dialog").on("dialogresize", functionDialogResize);
-        $("#dialog").one("dialogopen", function(ev) {
-            var size = $( "#dialog" ).dialog("option", "sizeCache-function");
+        var d = (<any>$("#dialog"));
+        d.on("dialogresize", functionDialogResize);
+        d.one("dialogopen", function(ev) {
+            var size = d.dialog("option", "sizeCache-function");
             if (size) {
-                $("#dialog").dialog("option", "width", size.width);
-                $("#dialog").dialog("option", "height", size.height);
+                d.dialog("option", "width", size.width);
+                d.dialog("option", "height", size.height);
                 functionDialogResize();
             }
         });
-        $("#dialog").one("dialogclose", function(ev, ui) {
-            var height = $("#dialog").dialog("option", "height");
-            $("#dialog").off("dialogresize", functionDialogResize);
+        d.one("dialogclose", function(ev, ui) {
+            var height = d.dialog("option", "height");
+            d.off("dialogresize", functionDialogResize);
         });
     }
 });
