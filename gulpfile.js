@@ -64,8 +64,11 @@ gulp.task('compile', function () {
     .pipe(tslint({
       configuration: 'tools/tslint/tslint-node.json'
     }))
-    .pipe(tslint.report('prose', {
-      emitError: false
+    .pipe(tslint({
+      formatter: "prose"
+    }))
+    .pipe(tslint.report({
+        emitError: false
     }))
     .pipe(addsrc.prepend('typings*/**/*.d.ts'))
     // .pipe (sourcemaps.init())
