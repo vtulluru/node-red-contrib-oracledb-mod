@@ -46,6 +46,9 @@ If you are going to use a TNS Name (with a "Wallet" connection - such as with Au
 
 ## What's new     <a name="whatsnew"></a>
 
+### version 0.6.1
+- return original `msg` object with result
+
 ### version 0.6.0
 
 - add connection name to allow multiple connections to server using different credentials/schemas

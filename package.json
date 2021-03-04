@@ -1,5 +1,5 @@
 {
-  "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru",
+  "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru and Todd Sharp",
   "bugs": {
     "url": "https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues"
   },
@@ -51,5 +51,5 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "version": "0.6.0"
+  "version": "0.6.1"
 }

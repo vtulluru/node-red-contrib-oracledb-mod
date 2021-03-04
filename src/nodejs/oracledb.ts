@@ -89,7 +89,7 @@ module.exports = function (RED) {
       }
       var resultAction = msg.resultAction || node.resultAction;
       var resultSetLimit = parseInt(msg.resultSetLimit || node.resultLimit, 10);
-      node.server.query(node, query, values, resultAction, resultSetLimit);
+      node.server.query(msg, node, query, values, resultAction, resultSetLimit);
     });
     //};
 
@@ -197,13 +197,13 @@ module.exports = function (RED) {
       }
     };
 
-    node.query = function (requestingNode, query, values, resultAction, resultSetLimit) {
+    node.query = function (msg, requestingNode, query, values, resultAction, resultSetLimit) {
       // console.log("requestingNode: " + requestingNode);
       // console.log("query: " + query);
       // console.log("values: " + values);
       // console.log("resultAction: " + resultAction);
       // console.log("resultSetLimit: " + resultSetLimit);
-
+      values = typeof values === 'undefined' ? [] : values;
       requestingNode.log("Oracle query start execution");
       if (node.connection) {
         delete node.reconnecting;
@@ -235,13 +235,12 @@ module.exports = function (RED) {
             } else {
               switch (resultAction) {
                 case "single":
-                  requestingNode.send({
-                    payload: result.rows
-                  });
+                  msg.payload = result.rows;
+                  requestingNode.send(msg);
                   requestingNode.log("Oracle query single result rows sent");
                   break;
                 case "multi":
-                  node.fetchRowsFromResultSet(requestingNode, result.resultSet, resultSetLimit);
+                  node.fetchRowsFromResultSet(msg, requestingNode, result.resultSet, resultSetLimit);
                   requestingNode.log("Oracle query multi result rows sent");
                   break;
                 default:
@@ -254,6 +253,7 @@ module.exports = function (RED) {
       } else {
         requestingNode.log("Oracle query execution queued");
         node.queryQueue.push({
+          msg: msg,
           requestingNode: requestingNode,
           query: query,
           values: values,
@@ -264,7 +264,7 @@ module.exports = function (RED) {
       }
     };
 
-    node.fetchRowsFromResultSet = function (requestingNode, resultSet, maxRows) {
+    node.fetchRowsFromResultSet = function (msg, requestingNode, resultSet, maxRows) {
       resultSet.getRows(maxRows, function (err, rows) {
         if (err) {
           requestingNode.error("Oracle resultSet error: " + err.message);
@@ -275,11 +275,10 @@ module.exports = function (RED) {
             }
           });
         } else {
-          requestingNode.send({
-            payload: rows
-          });
+          msg.payload = rows;
+          requestingNode.send(msg);
           requestingNode.log("Oracle query resultSet rows sent");
-          node.fetchRowsFromResultSet(requestingNode, resultSet, maxRows);
+          node.fetchRowsFromResultSet(msg, requestingNode, resultSet, maxRows);
         }
       });
     };
@@ -287,7 +286,7 @@ module.exports = function (RED) {
     node.queryQueued = function () {
       while (node.connection && node.queryQueue.length > 0) {
         var e = node.queryQueue.shift();
-        node.query(e.requestingNode, e.query, e.values, e.resultAction, e.resultSetLimit, e.sendResult);
+        node.query(e.msg, e.requestingNode, e.query, e.values, e.resultAction, e.resultSetLimit, e.sendResult);
       }
     };
   }

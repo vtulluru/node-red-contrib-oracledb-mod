@@ -94,7 +94,7 @@ describe("Test OracleServer Node function", function() {
         done();
       }
     };
-    serverNode.query(queryNode, "select count(*) from employees", [], "single", 100);
+    serverNode.query({}, queryNode, "select count(*) from employees", [], "single", 100);
   });
 
   it("should successfully execute a query with a parameter", function (done) {
@@ -110,7 +110,7 @@ describe("Test OracleServer Node function", function() {
         done();
       }
     };
-    serverNode.query(queryNode, "select * from employees where employee_id = :v1", [195], "single", 100);
+    serverNode.query({}, queryNode, "select * from employees where employee_id = :v1", [195], "single", 100);
   });
 });
 
