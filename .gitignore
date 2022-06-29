@@ -72,4 +72,6 @@ typings/
 # Serverless directories
 .serverless
 
-env.sh  
+env.sh 
+
+package-lock.json 

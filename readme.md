@@ -48,6 +48,14 @@ If you are going to use a TNS Name (with a "Wallet" connection - such as with Au
 
 ## What's new     <a name="whatsnew"></a>
 
+### version 0.6.2
+- dependency updates
+ oracledb             ^5.1.0  →   ^5.4.0     
+ @types/jquery        ^3.5.5  →  ^3.5.14     
+ chai                 ^4.2.0  →   ^4.3.6     
+ merge2               ^1.3.0  →   ^1.4.1     
+ source-map-support  ^0.5.19  →  ^0.5.21
+
 ### version 0.6.1
 - return original `msg` object with result
 
