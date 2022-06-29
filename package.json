@@ -1,55 +1,55 @@
 {
-  "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru and Todd Sharp",
-  "bugs": {
-    "url": "https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues"
-  },
-  "dependencies": {
-    "object-resolve-path": "^1.1.1",
-    "oracledb": "^5.4.0"
-  },
-  "deprecated": false,
-  "description": "Node-RED oracle database nodes",
-  "devDependencies": {
-    "@types/jquery": "^3.5.14",
-    "@types/mocha": "^9.1.1",
-    "chai": "^4.3.6",
-    "del": "^6.1.1",
-    "gulp": "^4.0.2",
-    "gulp-add-src": "^1.0.0",
-    "gulp-concat": "^2.6.1",
-    "gulp-rename": "^2.0.0",
-    "gulp-sourcemaps": "^3.0.0",
-    "gulp-spawn-mocha": "^6.0.0",
-    "gulp-tslint": "^8.1.4",
-    "gulp-typescript": "^5.0.1",
-    "merge2": "^1.4.1",
-    "source-map-support": "^0.5.21",
-    "tslint": "^6.1.2"
-  },
-  "directories": {
-    "lib": "lib"
-  },
-  "homepage": "https://github.com/vtulluru/node-red-contrib-oracledb-mod#readme",
-  "keywords": [
-    "node-red",
-    "oracle",
-    "sql",
-    "oracledb"
-  ],
-  "license": "MIT",
-  "main": "index.js",
-  "name": "node-red-contrib-oracledb-mod",
-  "node-red": {
-    "nodes": {
-      "oracledb": "lib/oracledb.js"
-    }
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vtulluru/node-red-contrib-oracledb-mod.git"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "version": "0.6.2"
+    "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru and Todd Sharp",
+    "bugs": {
+        "url": "https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues"
+    },
+    "dependencies": {
+        "object-resolve-path": "^1.1.1",
+        "oracledb": "^5.4.0"
+    },
+    "deprecated": false,
+    "description": "Node-RED oracle database nodes",
+    "devDependencies": {
+        "@types/jquery": "^3.5.14",
+        "@types/mocha": "^9.1.1",
+        "chai": "^4.3.6",
+        "del": "^6.1.1",
+        "gulp": "^4.0.2",
+        "gulp-add-src": "^1.0.0",
+        "gulp-concat": "^2.6.1",
+        "gulp-rename": "^2.0.0",
+        "gulp-sourcemaps": "^3.0.0",
+        "gulp-spawn-mocha": "^6.0.0",
+        "gulp-tslint": "^8.1.4",
+        "gulp-typescript": "^5.0.1",
+        "merge2": "^1.4.1",
+        "source-map-support": "^0.5.21",
+        "tslint": "^6.1.2"
+    },
+    "directories": {
+        "lib": "lib"
+    },
+    "homepage": "https://github.com/vtulluru/node-red-contrib-oracledb-mod#readme",
+    "keywords": [
+        "node-red",
+        "oracle",
+        "sql",
+        "oracledb"
+    ],
+    "license": "MIT",
+    "main": "index.js",
+    "name": "node-red-contrib-oracledb-mod",
+    "node-red": {
+        "nodes": {
+            "oracledb": "lib/oracledb.js"
+        }
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/vtulluru/node-red-contrib-oracledb-mod.git"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "version": "0.6.2"
 }
