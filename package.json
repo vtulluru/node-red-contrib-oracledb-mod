@@ -11,7 +11,7 @@
     "description": "Node-RED oracle database nodes",
     "devDependencies": {
         "@types/jquery": "^3.5.14",
-        "@types/mocha": "^9.1.1",
+        "@types/mocha": "^10.0.1",
         "chai": "^4.3.6",
         "del": "^6.1.1",
         "gulp": "^4.0.2",
