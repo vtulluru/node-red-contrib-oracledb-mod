@@ -49,6 +49,16 @@ If you are going to use a TNS Name (with a "Wallet" connection - such as with Au
 
 ## What's new     <a name="whatsnew"></a>
 
+### version 0.6.3
+- dependency updates
+  Bump del from 6.1.1 to 7.0.0 
+  Bump chai from 4.3.6 to 4.3.7
+  Bump @types/mocha from 9.1.1 to 10.0.1 
+  Bump decode-uri-component from 0.2.0 to 0.2.2
+  Bump oracledb from 5.4.0 to 5.5.0
+  
+- Fix node connection issues with DPI-1010 and DPI-1080
+
 ### version 0.6.2
 - dependency updates
  oracledb             ^5.1.0  →   ^5.4.0     

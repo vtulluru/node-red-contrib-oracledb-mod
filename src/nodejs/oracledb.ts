@@ -219,11 +219,12 @@ module.exports = function (RED) {
           values,
           options,
           function (err, result) {
-            if (err) {
-              requestingNode.error("Oracle query error: " + err.message);
-              var errorCode = err.message.slice(0, 9);
-              node.status.emit("error", err);
-              if (errorCode === "ORA-03113" || errorCode === "ORA-03114") {
+	    if (err) {
+	      var errorCode = err.message.slice(0, 9);
+	      requestingNode.error("Oracle query error: " + err.message +", errorCode:"+ errorCode);
+	      console.log("Oracle query error: " + err.message +", errorCode:"+ errorCode);
+	      node.status.emit("error", err);
+	      if (errorCode.contains("DPI-1010") || errorCode.contains("DPI-1080") || errorCode === "ORA-03113" || errorCode === "ORA-03114") 
                 // start reconnection process
                 node.connection = null;
                 if (node.reconnect) {

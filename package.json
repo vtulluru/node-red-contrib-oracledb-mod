@@ -5,14 +5,14 @@
     },
     "dependencies": {
         "object-resolve-path": "^1.1.1",
-        "oracledb": "^5.4.0"
+        "oracledb": "^5.5.0"
     },
     "deprecated": false,
     "description": "Node-RED oracle database nodes",
     "devDependencies": {
         "@types/jquery": "^3.5.14",
         "@types/mocha": "^10.0.1",
-        "chai": "^4.3.6",
+        "chai": "^4.3.7",
         "del": "^7.0.0",
         "gulp": "^4.0.2",
         "gulp-add-src": "^1.0.0",
@@ -51,5 +51,5 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "version": "0.6.2"
+    "version": "0.6.3"
 }
