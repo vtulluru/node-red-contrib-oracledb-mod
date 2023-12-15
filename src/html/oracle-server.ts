@@ -13,7 +13,7 @@ RED.nodes.registerType("oracle-server", {
         instantclientpath: { value: "" },
         host: { value: "localhost", required: false },
         port: { value: 1521, required: false, validate: function(v) {
-            return v == null || v.match(/^(\s*|\d+|null)$/);
+            return v == null || !!v.match(/^(\s*|\d+|null)$/);
         }},
         reconnect: {value: true},
         reconnecttimeout: { value: 5000, validate: RED.validators.number() },
