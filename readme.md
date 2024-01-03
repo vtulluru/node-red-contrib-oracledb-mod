@@ -49,6 +49,21 @@ If you are going to use a TNS Name (with a "Wallet" connection - such as with Au
 
 ## What's new     <a name="whatsnew"></a>
 
+### version 0.6.5 
+Port validation error is reapplied based on comments
+Bump oracledb from 6.0.3 to 6.3.0
+
+
+### version 0.6.4
+Bump @types/jquery from 3.5.14 to 3.5.16 by @dependabot in #23
+Trigger the catch node on error by @JheSue in #33
+Ensure port validation returns boolean by @knolleary in #37
+Bump oracledb from 5.5.0 to 6.0.3 by @dependabot in #31
+New Contributors
+@JheSue made their first contribution in #33
+@knolleary made their first contribution in #37
+Full Changelog: v0.6.3...v0.6.4
+
 ### version 0.6.3
 - dependency updates
   Bump del from 6.1.1 to 7.0.0 
