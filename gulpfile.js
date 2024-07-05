@@ -1,150 +1,100 @@
-/**
- * Created by Ab on 18-12-2015.
- */
+const { src, dest, series, parallel, watch } = require('gulp');
+const concat = require('gulp-concat');
+const addsrc = require('gulp-add-src');
+const ts = require('gulp-typescript');
+const tslint = require('gulp-tslint');
+const sourcemaps = require('gulp-sourcemaps');
+const mocha = require('gulp-spawn-mocha');
 
-var gulp = require('gulp');
-var del = require('del');
-var concat = require('gulp-concat');
-var rename = require('gulp-rename');
-var merge = require('merge2');
-var addsrc = require('gulp-add-src');
-var ts = require('gulp-typescript');
-var tslint = require('gulp-tslint');
-var sourcemaps = require('gulp-sourcemaps');
-var mocha = require('gulp-spawn-mocha');
-
-var node_red_root = process.env.NODE_RED_ROOT;
+const node_red_root = process.env.NODE_RED_ROOT;
 
 // swallow errors in watch
-function swallowError (error) {
-
-  //If you want details of the error in the console
-  console.log(error.toString());
-
+function swallowError(error) {
+  console.error(error.toString());
   this.emit('end');
 }
 
-//define typescript project
-var tsProject = ts.createProject({
-  module: 'commonjs',
-  target: 'ES5',
-  declaration: true
-});
+// define typescript project
+const tsProject = ts.createProject('tsconfig.json');
 
-gulp.task('default', ['build:clean']);
-
-gulp.task('build', ['compile', 'copy-to-lib', 'test', 'copy-to-node-red']);
-gulp.task('build:clean', ['clean', 'compile', 'test']);
-
-gulp.task('watch', ['clean', 'build'], function () {
-  gulp.watch('server/**/*.ts', ['build']);
-});
-
-
-gulp.task('clean', function (cb) {
-  del.sync([
+async function clean() {
+  const del = await import('del');
+  return del.deleteSync([
     'coverage',
     'transpiled'
   ]);
-  cb();
-});
+}
 
-gulp.task('clean:all', function () {
-  del([
-    'coverage',
-    'transpiled',
-    'node_modules'
-  ]);
-});
+function compile() {
+  return src('src/**/*.ts')
+    .pipe(sourcemaps.init())
+    .pipe(tslint({
+      configuration: 'tools/tslint/tslint-node.json',
+      formatter: 'prose'
+    }))
+    .pipe(tslint.report({ emitError: false }))
+    .pipe(tsProject())
+    .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../src/' }))
+    .pipe(dest('transpiled'));
+}
 
-
-gulp.task('compile', function () {
-  // compile typescript
-  var tsResult = gulp.src('src/**/*.ts')
+function lint() {
+  return src('src/**/*.ts')
     .pipe(tslint({
       configuration: 'tools/tslint/tslint-node.json'
     }))
-    .pipe(tslint({
-      formatter: "prose"
-    }))
-    .pipe(tslint.report({
-        emitError: false
-    }))
-    .pipe(addsrc.prepend('typings*/**/*.d.ts'))
-    // .pipe (sourcemaps.init())
-    .pipe (ts(tsProject));
+    .pipe(tslint.report());
+}
 
-  // return merge([
-  //   tsResult.js
-  //     .pipe(sourcemaps.write('.', {
-  //       includeContent: false,
-  //       sourceRoot: '../src/'
-  //     }))
-  //     .pipe(gulp.dest('transpiled')),
-  //   tsResult.dts.pipe(gulp.dest('transpiled'))
-  // ]);
-  return tsResult.js.pipe(gulp.dest('transpiled'));
-});
-
-
-gulp.task('lint', function () {
-  return gulp.src('src/**/*.ts')
-    .pipe(tslint({
-      configuration: 'tools/tslint/tslint-node.json'
-    }))
-    .pipe(tslint.report('full'));
-});
-
-gulp.task('copy-to-lib', ['compile'], function () {
-  return gulp.src([
+function copyToLib() {
+  return src([
     'src/html/*.html',
     'tools/concat/js_prefix.html',
     'transpiled/html/*.js',
     'tools/concat/js_suffix.html'
   ])
-  .pipe(concat('oracledb.html'))
-  .pipe(addsrc.append(['transpiled/nodejs/*.js', '!transpiled/nodejs/*.spec.js']))
-  .pipe(gulp.dest('lib'));
-});
+    .pipe(concat('oracledb.html'))
+    .pipe(addsrc.append(['transpiled/nodejs/*.js', '!transpiled/nodejs/*.spec.js']))
+    .pipe(dest('lib'));
+}
 
-gulp.task('copy-to-node-red', ['copy-to-lib'], function () {
+function copyToNodeRed() {
   if (node_red_root) {
-    return gulp.src(['lib/*.*'])
-    .pipe(gulp.dest(node_red_root + '/node_modules/node-red-contrib-oracledb-mod/lib'));
+    return src(['lib/*.*'])
+      .pipe(dest(node_red_root + '/node_modules/node-red-contrib-oracledb-mod/lib'));
   }
-});
+}
 
-// unit tests, more a fast integration test because at the moment it uses an external AMQP server
-gulp.task('test', ['copy-to-lib'], function () {
-  return gulp.src('transpiled/**/*.spec.js', {
-    read: false
-  })
+function test() {
+  return src('transpiled/**/*.spec.js', { read: false })
     .pipe(mocha({
       r: 'tools/mocha/setup.js',
-      reporter: 'dot' // 'spec', 'dot'
+      reporter: 'dot'
     }))
     .on('error', swallowError);
-});
+}
 
-// integration tests, at the moment more an extended version of the unit tests
-gulp.task('test:integration', ['copy-to-lib'], function () {
-  return gulp.src('transpiled/**/*.spec-i.js', {
-    read: false
-  })
-    .pipe(mocha({
-      reporter: 'dot' // 'spec', 'dot'
-    }))
+function watchFiles() {
+  watch('server/**/*.ts', compile);
+}
+
+exports.default = series(clean, compile);
+exports.build = series(clean, compile, copyToLib, test, copyToNodeRed);
+exports.buildClean = series(clean, compile, test);
+exports.watch = series(clean, compile, watchFiles);
+exports.clean = clean;
+exports.cleanAll = series(clean, () => del(['node_modules']));
+exports.compile = compile;
+exports.lint = lint;
+exports.copyToLib = copyToLib;
+exports.copyToNodeRed = series(copyToLib, copyToNodeRed);
+exports.test = series(copyToLib, test);
+exports.testIntegration = series(copyToLib, () => {
+  return src('transpiled/**/*.spec-i.js', { read: false })
+    .pipe(mocha({ reporter: 'dot' }))
     .on('error', swallowError);
 });
-
-gulp.task('test:coverage', ['copy-to-lib'], function () {
-  return gulp.src('transpiled/**/*.spec.js', {
-    read: false
-  })
-    .pipe(mocha({
-      reporter: 'spec', // 'spec', 'dot'
-      istanbul: true
-    }));
+exports.testCoverage = series(copyToLib, () => {
+  return src('transpiled/**/*.spec.js', { read: false })
+    .pipe(mocha({ reporter: 'spec', istanbul: true }));
 });
-
-
