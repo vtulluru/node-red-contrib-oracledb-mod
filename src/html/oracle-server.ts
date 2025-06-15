@@ -35,7 +35,7 @@ RED.nodes.registerType("oracle-server", {
             }
         });
         $(".connection-type").hide();
-        $("#node-config-input-connectiontype").on("change", function(evt){
+        $("#node-config-input-connectiontype").on("change", function(evt) {
             var ct = (<any> evt.currentTarget);
             if (ct.value === "TNS Name") {
                 $("#wallet-container").show();
@@ -48,7 +48,7 @@ RED.nodes.registerType("oracle-server", {
                 $("#classic-container").show();
                 $("#node-config-input-tnsname").val("");
             }
-        }).trigger('change');
+        }).trigger("change");
         tabs.addTab({
             id: "oracle-server-tab-connection",
             label: "Connection"
