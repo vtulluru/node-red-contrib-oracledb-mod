@@ -1,0 +1,106 @@
+<!-- OracleDB ----------------------------------------------------------------->
+
+<script type="text/x-red" data-template-name="oracledb">
+    <div class="form-row">
+        <ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="node-input-oracle-out-tabs"></ul>
+    </div>
+    <div id="node-input-oracle-out-tabs-content" style="min-height: 170px;">
+        <div id="oracle-out-tab-connection" style="display:none">
+              <div class="form-row">
+                  <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
+                  <input type="text" id="node-input-server" type="oracle-server">
+              </div>
+
+              <br/>
+              <div class="form-row">
+                  <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+                  <input type="text" id="node-input-name" placeholder="Name">
+              </div>
+        </div>
+        <div id="oracle-out-tab-query" style="display:none">
+            <div class="form-row" style="margin-bottom: 0px">
+                <input type="checkbox" id="node-input-usequery" style="display: inline-block; width: auto; vertical-align: top;">
+                <label for="node-input-usequery" style="width: 80%;">always execute this Oracle SQL statement (even if <i>msg.query</i> exists):</label>
+            </div>
+
+            <div class="form-row node-input-query-text-editor-row">
+                <textarea id="node-input-query" style="display: none;"></textarea>
+                <div style="height: 250px;" class="node-text-editor" id="node-input-query-editor" ></div>
+            </div>
+        </div>
+        <div id="oracle-out-tab-mappings" style="display:none">
+            <div class="form-row" style="margin-bottom: 0px">
+                <input type="checkbox" id="node-input-usemappings" style="display: inline-block; width: auto; vertical-align: top;">
+                <label for="node-input-usemappings" style="width: 80%;"> always use field mappings (even if <i>msg.payload</i> is an array)</label>
+            </div>
+
+            <div class="form-row node-input-mappings-text-editor-row">
+                <textarea id="node-input-mappings" style="display: none;"></textarea>
+                <div style="height: 250px;" class="node-text-editor" id="node-input-mappings-editor" ></div>
+            </div>
+        </div>
+        <div id="oracle-out-tab-results" style="display:none">
+            <div class="form-row">
+                <label for="node-input-resultaction"><i class="fa fa-hand-o-right"></i> Action</label>
+                <select type="text" id="node-input-resultaction" style="width: 270px;">
+                    <option value="none">ignore query results</option>
+                    <option value="single">send single query result message</option>
+                    <option value="single-meta">send single message with metadata</option>
+                    <option value="multi">send multiple query result messages</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <label for="node-input-resultlimit"><i class="fa fa-bars"></i> Msg rows</label>
+                <input type="text" id="node-input-resultlimit" style="width: 80px;"> (maximum # of result rows per message)
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="oracledb">
+  <p>Oracle database node. Executes SQL queries, PL/SQL blocks, and stored procedures.</p>
+  
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">array | object</span></dt>
+    <dd>
+        If an array, the values are used as positional bind parameters for the query (e.g., <code>:1, :2</code>).
+        If an object, it can be used with <b>Field Mappings</b> to generate the parameter array.
+    </dd>
+    <dt class="optional">query <span class="property-type">string</span></dt>
+    <dd>An SQL query or PL/SQL block to execute. If not provided, the query configured in the node's editor will be used.</dd>
+    <dt class="optional">bindVars <span class="property-type">object</span></dt>
+    <dd>
+        For advanced use cases like stored procedures with <code>OUT</code> parameters. This object provides explicit bind definitions.
+        <pre>msg.bindVars = {
+    output: { dir: "BIND_OUT", type: "STRING" },
+    input:  { dir: "BIND_IN", val: "my_value" }
+};</pre>
+    </dd>
+    <dt class="optional">fieldMappings <span class="property-type">array</span></dt>
+    <dd>An array of strings used to map properties from an object in <code>msg.payload</code> to a positional array for binding.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <p>The output depends on the <b>Action</b> selected in the "Query results" tab.</p>
+  <dl class="message-properties">
+      <dt>ignore query results</dt>
+      <dd>No message is sent.</dd>
+      <dt>send single query result message</dt>
+      <dd>Sends <b>one message</b>. <code>msg.payload</code> will be an array containing <b>all rows</b> returned by the query.</dd>
+      <dt>send single message with metadata</dt>
+      <dd>Sends <b>one message</b>. <code>msg.payload</code> will be an object containing metadata like <code>rowsAffected</code> and any <code>outBinds</code> from a stored procedure. This is useful for DML (INSERT, UPDATE, DELETE) or procedure calls.</dd>
+      <dt>send multiple query result messages</dt>
+      <dd>
+          Used for processing very large result sets without high memory usage. It sends <b>multiple messages</b>, each containing a chunk of rows. The size of the chunk is determined by the <b>Msg rows</b> setting.
+          <br/><br/>
+          <b>Note:</b> If the total number of rows is less than the "Msg rows" limit, this option will behave identically to "send single query result message".
+      </dd>
+  </dl>
+  
+  <h3>Executing Scripts</h3>
+  <p>
+      The node executes a single SQL statement or a single PL/SQL block at a time. To run multiple DML statements (<code>INSERT</code>, <code>UPDATE</code>, etc.) as a single transaction, wrap them in a <code>BEGIN...END;</code> block. To run multiple sequential queries, chain multiple <b>oracledb</b> nodes together in your flow.
+  </p>
+</script>

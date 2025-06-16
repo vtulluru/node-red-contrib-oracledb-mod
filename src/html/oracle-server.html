@@ -1,0 +1,101 @@
+<!-- Oracle-SERVER - CONFIG ----------------------------------------------------->
+
+<script type="text/x-red" data-template-name="oracle-server">
+    <div class="form-row">
+        <ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="node-config-oracle-server-tabs"></ul>
+    </div>
+    <div id="node-config-oracle-server-tabs-content" style="min-height: 170px;">
+        <div id="oracle-server-tab-connection" style="display:none">
+            <div class="form-row">
+                <label for="node-config-input-connectionname" style="width: 150px;"><i class="fa fa-cloud"></i> Connection Name</label>
+                <input class="input-append-left" type="text" required="required" id="node-config-input-connectionname" placeholder="Name">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-connectiontype" style="width: 150px;"><i class="fa fa-question"></i> Connection Type</label>
+                <select class="input-append-left" id="node-config-input-connectiontype">
+                    <option value="Classic">Classic</option>
+                    <option value="TNS Name">TNS Name</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-instantclientpath" style="width: 150px;"><i class="fa fa-folder"></i> Instant Client Path</label>
+                <input class="input-append-left" type="text" id="node-config-input-instantclientpath" placeholder="/path/to/instantclient">
+            </div>
+            <div id="wallet-container" class="connection-type">
+                <div class="form-row">
+                    <label for="node-config-input-tnsname" style="width: 150px;"><i class="fa fa-pencil"></i> TNS Name</label>
+                    <input class="input-append-left" type="text" id="node-config-input-tnsname" placeholder="tns_name">
+                </div>
+            </div>
+            <div id="classic-container" class="connection-type">
+                <div class="form-row">
+                    <label for="node-config-input-host" style="width: 150px;"><i class="fa fa-globe"></i> Server</label>
+                    <input class="input-append-left" type="text" id="node-config-input-host" placeholder="localhost" style="width: 40%">
+                    <label for="node-config-input-port" style="margin-left: 10px; width: 35px;"> Port</label>
+                    <input type="text" id="node-config-input-port" placeholder="1521" style="width:45px">
+                </div>
+                <div class="form-row">
+                    <label for="node-config-input-db" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
+                    <input type="text" id="node-config-input-db" placeholder="Database name">
+                </div>
+            </div>
+            <hr/>
+            <h4>Connection Pool (Recommended)</h4>
+            <div class="form-row">
+                <label for="node-config-input-poolmin" style="width: 150px;"><i class="fa fa-minus-square-o"></i> Min Connections</label>
+                <input type="number" id="node-config-input-poolmin" placeholder="0" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-poolmax" style="width: 150px;"><i class="fa fa-plus-square-o"></i> Max Connections</label>
+                <input type="number" id="node-config-input-poolmax" placeholder="4" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-pooltimeout" style="width: 150px;"><i class="fa fa-clock-o"></i> Idle Timeout (s)</label>
+                <input type="number" id="node-config-input-pooltimeout" placeholder="60" style="width: 60px;">
+            </div>
+        </div>
+        <div id="oracle-server-tab-security" style="display:none">
+            <div class="form-row">
+                <label for="node-config-input-user"><i class="fa fa-user"></i> User</label>
+                <input type="text" id="node-config-input-user" >
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-password"><i class="fa fa-lock"></i> Password</label>
+                <input type="password" id="node-config-input-password" >
+            </div>
+        </div>
+    </div>
+</script>
+<script type="text/x-red" data-help-name="oracle-server">
+    <p>Configures the connection to your Oracle Database. Using a connection pool is highly recommended for stability.</p>
+    
+    <h3>Connection Properties</h3>
+    <dl class="message-properties">
+        <dt>Connection Name</dt>
+        <dd>A unique name for this connection configuration.</dd>
+        
+        <dt>Connection Type</dt>
+        <dd>
+            <ul>
+                <li><b>Classic:</b> A connection using host, port, and database name/service.</li>
+                <li><b>TNS Name:</b> A connection using a TNS Name from a `tnsnames.ora` file.</li>
+            </ul>
+        </dd>
+        
+        <dt>Instant Client Path</dt>
+        <dd>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>. This is required for the node to find the necessary Oracle libraries.</dd>
+    </dl>
+    
+    <h3>Connection Pool</h3>
+    <p>These settings control the pool of database connections managed by the driver. This is the recommended way to handle connections as it automatically recovers from network disconnects and timeouts caused by firewalls.</p>
+    <dl class="message-properties">
+        <dt>Min Connections</dt>
+        <dd>The number of connections to create when the pool is started. Defaults to <code>0</code>.</dd>
+        
+        <dt>Max Connections</dt>
+        <dd>The maximum number of connections the pool can have. Defaults to <code>4</code>.</dd>
+        
+        <dt>Idle Timeout (s)</dt>
+        <dd>How long (in seconds) a connection can be idle in the pool before it is terminated to save resources. Defaults to <code>60</code>.</dd>
+    </dl>
+</script>
