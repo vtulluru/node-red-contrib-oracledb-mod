@@ -17,6 +17,11 @@ RED.nodes.registerType("oracle-server", {
         poolmin: { value: 0, required: false, validate: RED.validators.number() },
         poolmax: { value: 4, required: false, validate: RED.validators.number() },
         pooltimeout: { value: 60, required: false, validate: RED.validators.number() },
+        
+        // These properties are no longer used by the backend but are kept here
+        // to prevent existing config nodes from being marked as "invalid".
+        reconnect: { value: true },
+        reconnecttimeout: { value: 5000 },
     },
     credentials: {
         user: { type: "text" },
