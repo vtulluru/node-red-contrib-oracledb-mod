@@ -1,4 +1,3 @@
-
 <!-- Oracle-SERVER - CONFIG ----------------------------------------------------->
 
 <script type="text/x-red" data-template-name="oracle-server">
@@ -36,17 +35,23 @@
                     <input type="text" id="node-config-input-port" placeholder="1521" style="width:45px">
                 </div>
                 <div class="form-row">
-                    <label for="node-config-input-vhost" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
+                    <label for="node-config-input-db" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
                     <input type="text" id="node-config-input-db" placeholder="Database name">
                 </div>
             </div>
+            <hr/>
+            <h4>Connection Pool (Recommended)</h4>
             <div class="form-row">
-                <input type="checkbox" id="node-config-input-reconnect" style="display: inline-block; width: auto; vertical-align: top;">
-                <label for="node-config-input-reconnect" style="width: 70%;"> Enable automatic connection</label>
+                <label for="node-config-input-poolmin" style="width: 150px;"><i class="fa fa-minus-square-o"></i> Min Connections</label>
+                <input type="number" id="node-config-input-poolmin" placeholder="0" style="width: 60px;">
             </div>
             <div class="form-row">
-                <label for="node-config-input-reconnecttimeout" style="width: auto"><i class="fa fa-clock-o"></i> Reconnect interval (ms)</label>
-                <input type="text" id="node-config-input-reconnecttimeout" style="width:60px">
+                <label for="node-config-input-poolmax" style="width: 150px;"><i class="fa fa-plus-square-o"></i> Max Connections</label>
+                <input type="number" id="node-config-input-poolmax" placeholder="4" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-pooltimeout" style="width: 150px;"><i class="fa fa-clock-o"></i> Idle Timeout (s)</label>
+                <input type="number" id="node-config-input-pooltimeout" placeholder="60" style="width: 60px;">
             </div>
         </div>
         <div id="oracle-server-tab-security" style="display:none">
@@ -62,43 +67,37 @@
     </div>
 </script>
 <script type="text/x-red" data-help-name="oracle-server">
-    <h3>Connection</h3>
-    <h4>Connection Name:</h4>
-    <p>A name for this connection.</p>
-    <h4>Connection Type:</h4>
-    <ul>
-        <li><b>Classic:</b> A connection using <span class="property-type">host</span>, <span class="property-type">port</span>, and <span class="property-type">db</span>.</li>
-        <li><b>TNS Name:</b> A connection using a TNS Name which requires a wallet to be installed on the server.</li>
-    </ul>
-    <h5>Instant Client Path</h5>
-    <p>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>.</p>
-
-    <h4>When 'Classic' Connection Type Is Chosen:</h4>
-    <ul>
-        <li><b>Server:</b> The host name for the Oracle DB server.</li>
-        <li><b>Port:</b> The server port.</li>
-        <li><b>Database:</b> The DB name.</li>
-    </ul>
-
-    <h4>When 'TNS Name' Connection Type Is Chosen:</h4>
-    <ul>
-        <li><b>TNS Name:</b> The TNS Name. Requires that your wallet is placed in the <code>/path/to/instantclient/network/admin</code> directory on the server. Must match an entry in the <code>tnsnames.ora</code> file!</li>
-    </ul>
-
-    <h4>Optional:</h4>
-    <ul>
-        <li><b>Enable automatic connection</b></li>
-        <li><b>Reconnect interval (ms)</b></li>
-    </ul>
-
-    <h3>Security</h3>
-    <h4>Credentials</h4>
-    <ul>
-        <li><b>User:</b> The username to use to establish the connection.</li>
-        <li><b>Password:</b> The DB user's password.</li>
-    </ul>
-
-    <p><b>Note:</b> You must install the Oracle Instant Client and place your Wallet contents in the <code>/path/to/instantclient/network/admin</code> directory on the server before using a TNS Name Connection.</p>
+    <p>Configures the connection to your Oracle Database. Using a connection pool is highly recommended for stability.</p>
+    
+    <h3>Connection Properties</h3>
+    <dl class="message-properties">
+        <dt>Connection Name</dt>
+        <dd>A unique name for this connection configuration.</dd>
+        
+        <dt>Connection Type</dt>
+        <dd>
+            <ul>
+                <li><b>Classic:</b> A connection using host, port, and database name/service.</li>
+                <li><b>TNS Name:</b> A connection using a TNS Name from a `tnsnames.ora` file.</li>
+            </ul>
+        </dd>
+        
+        <dt>Instant Client Path</dt>
+        <dd>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>. This is required for the node to find the necessary Oracle libraries.</dd>
+    </dl>
+    
+    <h3>Connection Pool</h3>
+    <p>These settings control the pool of database connections managed by the driver. This is the recommended way to handle connections as it automatically recovers from network disconnects and timeouts caused by firewalls.</p>
+    <dl class="message-properties">
+        <dt>Min Connections</dt>
+        <dd>The number of connections to create when the pool is started. Defaults to <code>0</code>.</dd>
+        
+        <dt>Max Connections</dt>
+        <dd>The maximum number of connections the pool can have. Defaults to <code>4</code>.</dd>
+        
+        <dt>Idle Timeout (s)</dt>
+        <dd>How long (in seconds) a connection can be idle in the pool before it is terminated to save resources. Defaults to <code>60</code>.</dd>
+    </dl>
 </script>
 <!-- OracleDB ----------------------------------------------------------------->
 
@@ -110,7 +109,7 @@
         <div id="oracle-out-tab-connection" style="display:none">
               <div class="form-row">
                   <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
-                  <input type="text" id="node-input-server">
+                  <input type="text" id="node-input-server" type="oracle-server">
               </div>
 
               <br/>
@@ -147,6 +146,7 @@
                 <select type="text" id="node-input-resultaction" style="width: 270px;">
                     <option value="none">ignore query results</option>
                     <option value="single">send single query result message</option>
+                    <option value="single-meta">send single message with metadata</option>
                     <option value="multi">send multiple query result messages</option>
                 </select>
             </div>
@@ -160,29 +160,55 @@
 </script>
 
 <script type="text/x-red" data-help-name="oracledb">
-  <p>Oracle database storage node. Connects to a server and inserts rows into the database or retrieves rows from the database with a SQL query.</p>
-  <p>Expects an object called
-  <b>msg</b> containing <b>msg.payload</b> and optionally <b>msg.query</b> and <b>msg.mappings</b>.</p>
+  <p>Oracle database node. Executes SQL queries, PL/SQL blocks, and stored procedures.</p>
+  
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">array | object</span></dt>
+    <dd>
+        If an array, the values are used as positional bind parameters for the query (e.g., <code>:1, :2</code>).
+        If an object, it can be used with <b>Field Mappings</b> to generate the parameter array.
+    </dd>
+    <dt class="optional">query <span class="property-type">string</span></dt>
+    <dd>An SQL query or PL/SQL block to execute. If not provided, the query configured in the node's editor will be used.</dd>
+    <dt class="optional">bindVars <span class="property-type">object</span></dt>
+    <dd>
+        For advanced use cases like stored procedures with <code>OUT</code> parameters. This object provides explicit bind definitions.
+        <pre>msg.bindVars = {
+    output: { dir: "BIND_OUT", type: "STRING" },
+    input:  { dir: "BIND_IN", val: "my_value" }
+};</pre>
+    </dd>
+    <dt class="optional">fieldMappings <span class="property-type">array</span></dt>
+    <dd>An array of strings used to map properties from an object in <code>msg.payload</code> to a positional array for binding.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <p>The output depends on the <b>Action</b> selected in the "Query results" tab.</p>
+  <dl class="message-properties">
+      <dt>ignore query results</dt>
+      <dd>No message is sent.</dd>
+      <dt>send single query result message</dt>
+      <dd>Sends <b>one message</b>. <code>msg.payload</code> will be an array containing <b>all rows</b> returned by the query.</dd>
+      <dt>send single message with metadata</dt>
+      <dd>Sends <b>one message</b>. <code>msg.payload</code> will be an object containing metadata like <code>rowsAffected</code> and any <code>outBinds</code> from a stored procedure. This is useful for DML (INSERT, UPDATE, DELETE) or procedure calls.</dd>
+      <dt>send multiple query result messages</dt>
+      <dd>
+          Used for processing very large result sets without high memory usage. It sends <b>multiple messages</b>, each containing a chunk of rows. The size of the chunk is determined by the <b>Msg rows</b> setting.
+          <br/><br/>
+          <b>Note:</b> If the total number of rows is less than the "Msg rows" limit, this option will behave identically to "send single query result message".
+      </dd>
+  </dl>
+  
+  <h3>Executing Scripts</h3>
   <p>
-  <b>msg.payload</b>: array containing the fields to be used inside the query, first element in the array corresponds with the first `:fieldname` parameter in the query etc.<br>
-  <b>msg.query</b>: string containing the SQL query, if this is not available, the default SQL query will be used.<br>
-  <b>msg.bindVars</b>: object for manually binding variables, typically used for stored procedures and stored functions. For example:
-  <pre>
-  msg.query = "BEGIN :output := example_function(input_param => :input_param); END;";
-  msg.bindVars = {
-      output: { dir: "BIND_OUT", type: "NUMBER" },
-      input_param:  { dir: "BIND_IN",  type: "STRING", val: input_value }
-  };
-  </pre>
-  If <i>msg.bindVars</i> is not provided, automatic binding will be based on <i>msg.payload</i> and <i>msg.query</i>.<br>
-  <b>msg.fieldMappings</b>: array containing the object to array field mappings. Will be used if the content of <i>msg.payload</i> is not an array. If this is not available, the default field mappings will be used.<br>
-  <b>msg.resultAction</b>: string containing "single", "multi" or "none", if "single" a single result message containing the resulting rows will be sent, if "multi" the results can be spread over multiple messages, if "none" no messages will be sent.
-  If this is not available the default defined in <i>Query results</i> will be used.<br>
-  <b>msg.resultSetSize</b>: number, maximum number of rows in a result message. If this is not available the default defined in <i>Query results</i> will be used.
+      The node executes a single SQL statement or a single PL/SQL block at a time. To run multiple DML statements (<code>INSERT</code>, <code>UPDATE</code>, etc.) as a single transaction, wrap them in a <code>BEGIN...END;</code> block. To run multiple sequential queries, chain multiple <b>oracledb</b> nodes together in your flow.
   </p>
 </script>
-
 <script type="text/javascript">
+//
+// -- oracle server --------------------------------------------------------------------------------
+//
 RED.nodes.registerType("oracle-server", {
     category: "config",
     defaults: {
@@ -191,12 +217,11 @@ RED.nodes.registerType("oracle-server", {
         connectiontype: { value: "Classic" },
         instantclientpath: { value: "" },
         host: { value: "localhost", required: false },
-        port: { value: 1521, required: false, validate: function (v) {
-                return v == null || !!v.match(/^(\s*|\d+|null)$/);
-            } },
-        reconnect: { value: true },
-        reconnecttimeout: { value: 5000, validate: RED.validators.number() },
+        port: { value: 1521, required: false, validate: RED.validators.number() },
         db: { value: "", required: false },
+        poolmin: { value: 0, required: false, validate: RED.validators.number() },
+        poolmax: { value: 4, required: false, validate: RED.validators.number() },
+        pooltimeout: { value: 60, required: false, validate: RED.validators.number() },
     },
     credentials: {
         user: { type: "text" },
@@ -241,8 +266,9 @@ RED.nodes.registerType("oracle-server", {
     }
 });
 
-//# sourceMappingURL=oracle-server.js.map
-
+//
+// -- oracledb -------------------------------------------------------------------------------------
+//
 RED.nodes.registerType("oracledb", {
     category: "storage",
     defaults: {
@@ -254,7 +280,7 @@ RED.nodes.registerType("oracledb", {
                 "\n\t\t:valueOfValuesArrayIndex0," +
                 "\n\t\t:valueOfValuesArrayIndex1," +
                 "\n\t\t:valueOfValuesArrayIndex2," +
-                "\n\t\)" },
+                "\n\t)" },
         usemappings: { value: false },
         mappings: { value: "[" +
                 "\n\t\"location.of.first.array.index.field.in.msg.payload\"," +
@@ -277,15 +303,17 @@ RED.nodes.registerType("oracledb", {
         return this.name ? "node_label_italic" : "";
     },
     oneditprepare: function () {
+        // use query editor
         var queryField = $("#node-input-query");
         var queryEditor = RED.editor.createEditor({
             id: "node-input-query-editor",
-            mode: "ace/mode/sql",
+            mode: "ace/mode/sql", // unfortunately not yet included in the node-red version of ace
             value: queryField.val()
         });
         queryEditor.getSession().on("change", function () {
             queryField.val(queryEditor.getSession().getValue());
         });
+        // use mappings editor
         var mappingsField = $("#node-input-mappings");
         var mappingsEditor = RED.editor.createEditor({
             id: "node-input-mappings-editor",
@@ -330,7 +358,8 @@ RED.nodes.registerType("oracledb", {
             label: "Query results"
         });
         setTimeout(function () { tabs.resize(); }, 0);
-        function functionDialogResize() {
+        // resize editor areas to fit the edit window
+        var functionDialogResize = function () {
             var height = $("#dialog-form").height();
             height -= $("#node-input-oracle-out-tabs").outerHeight(true);
             var rows = $("#oracle-out-tab-" + visibleTab + ">div:not(.node-input-" + visibleTab + "-text-editor-row)");
@@ -352,10 +381,10 @@ RED.nodes.registerType("oracledb", {
             else {
                 mappingsEditor.resize();
             }
-        }
+        };
         var d = $("#dialog");
         d.on("dialogresize", functionDialogResize);
-        d.one("dialogopen", function (ev) {
+        d.one("dialogopen", function () {
             var size = d.dialog("option", "sizeCache-function");
             if (size) {
                 d.dialog("option", "width", size.width);
@@ -363,13 +392,10 @@ RED.nodes.registerType("oracledb", {
                 functionDialogResize();
             }
         });
-        d.one("dialogclose", function (ev, ui) {
-            var height = d.dialog("option", "height");
+        d.one("dialogclose", function () {
             d.off("dialogresize", functionDialogResize);
         });
     }
 });
-
-//# sourceMappingURL=oracledb.js.map
 
 </script>

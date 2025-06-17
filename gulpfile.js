@@ -1,52 +1,61 @@
 const { src, dest, series, parallel, watch } = require('gulp');
 const concat = require('gulp-concat');
-const addsrc = require('gulp-add-src');
 const ts = require('gulp-typescript');
-const tslint = require('gulp-tslint');
+const eslint = require('gulp-eslint-new');
 const sourcemaps = require('gulp-sourcemaps');
 const mocha = require('gulp-spawn-mocha');
 
 const node_red_root = process.env.NODE_RED_ROOT;
 
-// swallow errors in watch
+// Create separate TypeScript projects from the new config files.
+// This is the key to solving the compilation and scope issues.
+const tsBackendProject = ts.createProject('src/nodejs/tsconfig.json');
+const tsFrontendProject = ts.createProject('src/html/tsconfig.json');
+
+// A simple error handler for the 'watch' task
 function swallowError(error) {
   console.error(error.toString());
   this.emit('end');
 }
 
-// define typescript project
-const tsProject = ts.createProject('tsconfig.json');
-
+// Cleans the build output directories
 async function clean() {
   const del = await import('del');
-  return del.deleteSync([
-    'coverage',
-    'transpiled'
-  ]);
+  return del.deleteSync(['coverage', 'transpiled', 'lib']);
 }
 
-function compile() {
-  return src('src/**/*.ts')
-    .pipe(sourcemaps.init())
-    .pipe(tslint({
-      configuration: 'tools/tslint/tslint-node.json',
-      formatter: 'prose'
-    }))
-    .pipe(tslint.report({ emitError: false }))
-    .pipe(tsProject())
-    .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../src/' }))
-    .pipe(dest('transpiled'));
-}
-
+// Lints the backend TypeScript source files
 function lint() {
-  return src('src/**/*.ts')
-    .pipe(tslint({
-      configuration: 'tools/tslint/tslint-node.json'
-    }))
-    .pipe(tslint.report());
+  return src('src/nodejs/**/*.ts') // Only lint backend code
+    .pipe(eslint())
+    .pipe(eslint.format())
+    .pipe(eslint.failAfterError());
 }
 
-function copyToLib() {
+// Compiles the backend TypeScript code (Node.js)
+function compileBackend() {
+  return src('src/nodejs/**/*.ts')
+    .pipe(sourcemaps.init())
+    .pipe(eslint())
+    .pipe(eslint.format())
+    .pipe(tsBackendProject())
+    .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../../src/nodejs' }))
+    .pipe(dest('transpiled/nodejs'));
+}
+
+// Compiles the frontend TypeScript code (Editor)
+function compileFrontend() {
+  // We do not lint the frontend code as it uses a different style (e.g., global RED object)
+  return src('src/html/**/*.ts')
+    .pipe(tsFrontendProject())
+    .pipe(dest('transpiled/html'));
+}
+
+// Combines both compile tasks to run in parallel
+const compile = parallel(compileBackend, compileFrontend);
+
+// Builds the final frontend HTML file for Node-RED
+function buildHtml() {
   return src([
     'src/html/*.html',
     'tools/concat/js_prefix.html',
@@ -54,19 +63,21 @@ function copyToLib() {
     'tools/concat/js_suffix.html'
   ])
     .pipe(concat('oracledb.html'))
-    .pipe(addsrc.append(['transpiled/nodejs/*.js', '!transpiled/nodejs/*.spec.js']))
     .pipe(dest('lib'));
 }
 
-function copyToNodeRed() {
-  if (node_red_root) {
-    return src(['lib/*.*'])
-      .pipe(dest(node_red_root + '/node_modules/node-red-contrib-oracledb-mod/lib'));
-  }
+// Copies the final backend JS file to the lib directory
+function buildJs() {
+  return src(['transpiled/nodejs/*.js', '!transpiled/nodejs/*.spec.js'])
+    .pipe(dest('lib'));
 }
 
+// The main build task that creates the final 'lib' directory
+const buildLib = series(compile, parallel(buildHtml, buildJs));
+
+// Runs the unit tests
 function test() {
-  return src('transpiled/**/*.spec.js', { read: false })
+  return src('transpiled/nodejs/**/*.spec.js', { read: false })
     .pipe(mocha({
       r: 'tools/mocha/setup.js',
       reporter: 'dot'
@@ -74,27 +85,10 @@ function test() {
     .on('error', swallowError);
 }
 
-function watchFiles() {
-  watch('server/**/*.ts', compile);
-}
-
-exports.default = series(clean, compile);
-exports.build = series(clean, compile, copyToLib, test, copyToNodeRed);
-exports.buildClean = series(clean, compile, test);
-exports.watch = series(clean, compile, watchFiles);
+// Exported Gulp tasks
 exports.clean = clean;
-exports.cleanAll = series(clean, () => del(['node_modules']));
-exports.compile = compile;
 exports.lint = lint;
-exports.copyToLib = copyToLib;
-exports.copyToNodeRed = series(copyToLib, copyToNodeRed);
-exports.test = series(copyToLib, test);
-exports.testIntegration = series(copyToLib, () => {
-  return src('transpiled/**/*.spec-i.js', { read: false })
-    .pipe(mocha({ reporter: 'dot' }))
-    .on('error', swallowError);
-});
-exports.testCoverage = series(copyToLib, () => {
-  return src('transpiled/**/*.spec.js', { read: false })
-    .pipe(mocha({ reporter: 'spec', istanbul: true }));
-});
+exports.compile = compile;
+exports.build = series(clean, buildLib);
+exports.test = series(clean, buildLib, test);
+exports.default = exports.build;

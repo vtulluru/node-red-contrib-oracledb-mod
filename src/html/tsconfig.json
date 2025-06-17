@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES5",
+    "module": "none",
+    "outDir": "../../transpiled/html",
+    "rootDir": ".",
+    "sourceMap": true,
+    "types": [
+      "jquery"
+    ]
+  }
+}

@@ -1,4 +1,3 @@
-
 <!-- Oracle-SERVER - CONFIG ----------------------------------------------------->
 
 <script type="text/x-red" data-template-name="oracle-server">
@@ -36,17 +35,23 @@
                     <input type="text" id="node-config-input-port" placeholder="1521" style="width:45px">
                 </div>
                 <div class="form-row">
-                    <label for="node-config-input-vhost" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
+                    <label for="node-config-input-db" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
                     <input type="text" id="node-config-input-db" placeholder="Database name">
                 </div>
             </div>
+            <hr/>
+            <h4>Connection Pool (Recommended)</h4>
             <div class="form-row">
-                <input type="checkbox" id="node-config-input-reconnect" style="display: inline-block; width: auto; vertical-align: top;">
-                <label for="node-config-input-reconnect" style="width: 70%;"> Enable automatic connection</label>
+                <label for="node-config-input-poolmin" style="width: 150px;"><i class="fa fa-minus-square-o"></i> Min Connections</label>
+                <input type="number" id="node-config-input-poolmin" placeholder="0" style="width: 60px;">
             </div>
             <div class="form-row">
-                <label for="node-config-input-reconnecttimeout" style="width: auto"><i class="fa fa-clock-o"></i> Reconnect interval (ms)</label>
-                <input type="text" id="node-config-input-reconnecttimeout" style="width:60px">
+                <label for="node-config-input-poolmax" style="width: 150px;"><i class="fa fa-plus-square-o"></i> Max Connections</label>
+                <input type="number" id="node-config-input-poolmax" placeholder="4" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-pooltimeout" style="width: 150px;"><i class="fa fa-clock-o"></i> Idle Timeout (s)</label>
+                <input type="number" id="node-config-input-pooltimeout" placeholder="60" style="width: 60px;">
             </div>
         </div>
         <div id="oracle-server-tab-security" style="display:none">
@@ -62,41 +67,35 @@
     </div>
 </script>
 <script type="text/x-red" data-help-name="oracle-server">
-    <h3>Connection</h3>
-    <h4>Connection Name:</h4>
-    <p>A name for this connection.</p>
-    <h4>Connection Type:</h4>
-    <ul>
-        <li><b>Classic:</b> A connection using <span class="property-type">host</span>, <span class="property-type">port</span>, and <span class="property-type">db</span>.</li>
-        <li><b>TNS Name:</b> A connection using a TNS Name which requires a wallet to be installed on the server.</li>
-    </ul>
-    <h5>Instant Client Path</h5>
-    <p>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>.</p>
-
-    <h4>When 'Classic' Connection Type Is Chosen:</h4>
-    <ul>
-        <li><b>Server:</b> The host name for the Oracle DB server.</li>
-        <li><b>Port:</b> The server port.</li>
-        <li><b>Database:</b> The DB name.</li>
-    </ul>
-
-    <h4>When 'TNS Name' Connection Type Is Chosen:</h4>
-    <ul>
-        <li><b>TNS Name:</b> The TNS Name. Requires that your wallet is placed in the <code>/path/to/instantclient/network/admin</code> directory on the server. Must match an entry in the <code>tnsnames.ora</code> file!</li>
-    </ul>
-
-    <h4>Optional:</h4>
-    <ul>
-        <li><b>Enable automatic connection</b></li>
-        <li><b>Reconnect interval (ms)</b></li>
-    </ul>
-
-    <h3>Security</h3>
-    <h4>Credentials</h4>
-    <ul>
-        <li><b>User:</b> The username to use to establish the connection.</li>
-        <li><b>Password:</b> The DB user's password.</li>
-    </ul>
-
-    <p><b>Note:</b> You must install the Oracle Instant Client and place your Wallet contents in the <code>/path/to/instantclient/network/admin</code> directory on the server before using a TNS Name Connection.</p>
+    <p>Configures the connection to your Oracle Database. Using a connection pool is highly recommended for stability.</p>
+    
+    <h3>Connection Properties</h3>
+    <dl class="message-properties">
+        <dt>Connection Name</dt>
+        <dd>A unique name for this connection configuration.</dd>
+        
+        <dt>Connection Type</dt>
+        <dd>
+            <ul>
+                <li><b>Classic:</b> A connection using host, port, and database name/service.</li>
+                <li><b>TNS Name:</b> A connection using a TNS Name from a `tnsnames.ora` file.</li>
+            </ul>
+        </dd>
+        
+        <dt>Instant Client Path</dt>
+        <dd>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>. This is required for the node to find the necessary Oracle libraries.</dd>
+    </dl>
+    
+    <h3>Connection Pool</h3>
+    <p>These settings control the pool of database connections managed by the driver. This is the recommended way to handle connections as it automatically recovers from network disconnects and timeouts caused by firewalls.</p>
+    <dl class="message-properties">
+        <dt>Min Connections</dt>
+        <dd>The number of connections to create when the pool is started. Defaults to <code>0</code>.</dd>
+        
+        <dt>Max Connections</dt>
+        <dd>The maximum number of connections the pool can have. Defaults to <code>4</code>.</dd>
+        
+        <dt>Idle Timeout (s)</dt>
+        <dd>How long (in seconds) a connection can be idle in the pool before it is terminated to save resources. Defaults to <code>60</code>.</dd>
+    </dl>
 </script>

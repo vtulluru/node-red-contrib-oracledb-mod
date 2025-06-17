@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "../../transpiled/nodejs",
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": true,
+    "strict": false
+  }
+}

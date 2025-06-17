@@ -35,6 +35,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+transpiled/
 
 # TypeScript v1 declaration files
 typings/
@@ -74,3 +75,5 @@ typings/
 
 env.sh 
 
+*.sh
+*.txt

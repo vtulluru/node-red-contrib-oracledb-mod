@@ -1,155 +1,174 @@
 /**
  * Tests for oracledb
- * Created by Ab on 2016-03-01.
  */
 import * as Chai from "chai";
+import * as dotenv from "dotenv";
+dotenv.config(); // Load environment variables from .env file
 
-var EventEmitter = require("events");
-var expect = Chai.expect;
+const EventEmitter = require("events");
+const expect = Chai.expect;
 
-var oracleNodes = require("../../lib/oracledb");
+const oracleNodes = require("../../lib/oracledb");
 
-// define test defaults
-var OracleHost = process.env.ORACLEDBTEST_HOST || "localhost";
-var OracledPort = process.env.ORACLEDBTEST_PORT || 1521;
-var OracleDb = process.env.ORACLEDBTEST_DB || "orcl";
-var OracleUser = process.env.ORACLEDBTEST_USER || "hr";
-var OraclePassword = process.env.ORACLEDBTEST_PASSWORD || "hr";
-var InstantClientPath = process.env.ORACLEDBTEST_INSTANT_CLIENT_PATH;
+// --- Load Test Configuration from Environment ---
+const {
+  ORACLEDBTEST_INSTANT_CLIENT_PATH,
+  ORACLEDBTEST_CONNECTION_TYPE,
+  ORACLEDBTEST_TNS_NAME,
+  ORACLEDBTEST_USER,
+  ORACLEDBTEST_PASSWORD,
+  ORACLEDBTEST_HOST,
+  ORACLEDBTEST_PORT,
+  ORACLEDBTEST_DB
+} = process.env;
 
-var testNodes = {};
-// var logListener = new EventEmitter();
-// function expectLog(expectedMsg, done) {
-//   "use strict";
-//   function checkMsg (msg) {
-//     if (msg.slice(0, expectedMsg.length) === expectedMsg) {
-//       logListener.removeListener("log", checkMsg);
-//       done();
-//     }
-//   }
-//   logListener.on("log", checkMsg);
-// }
+const testNodes = {};
+const nodeListener = new EventEmitter();
 
-var nodeListener = new EventEmitter();
-var REDmock = {
+// --- A more complete mock of the Node-RED runtime ---
+const REDmock = {
   nodes: {
     createNode: function (node, config) {
-      console.log(node);
+      for (const key in config) {
+        if (Object.prototype.hasOwnProperty.call(config, key)) {
+          node[key] = config[key];
+        }
+      }
+      // Provide credentials from the test environment
       node.credentials = {
-        user: OracleUser,
-        password: OraclePassword
+        user: ORACLEDBTEST_USER,
+        password: ORACLEDBTEST_PASSWORD
       };
-      node.log = function (msg) {
-        console.log(msg);
-//        logListener.emit("log", msg);
-      };
-      node.on = function (event, action) {
-        nodeListener.on(event, action);
-      };
-      node.status = function (status) {
-//
-      };
+      node.log = (msg) => console.log(`[LOG] ${msg}`);
+      node.error = (msg) => console.error(`[ERROR] ${msg}`);
+      node.warn = (msg) => console.warn(`[WARN] ${msg}`);
+      node.status = () => {};
+      node.on = (event, action) => nodeListener.on(event, action);
     },
-    registerType: function (nodeName, node, properties?) {
-      testNodes[nodeName] = node;
+    registerType: function (nodeName, constructor) {
+      testNodes[nodeName] = constructor;
     },
-    getNode: function (node) {
-      // always return node
-      return node;
-    }
+    getNode: (id) => id
   }
 };
-var serverConfig = {
-  host: OracleHost,
-  port: OracledPort,
-  reconnect: false,
-  reconnecttimeout: 5000,
-  db: OracleDb,
-  instantclientpath: InstantClientPath
-};
-// initialize test nodes
+
 oracleNodes(REDmock);
 
-describe("Test OracleServer Node function", function() {
+// --- Build the server configuration based on the environment ---
+const serverConfig = {
+  instantclientpath: ORACLEDBTEST_INSTANT_CLIENT_PATH,
+  connectiontype: ORACLEDBTEST_CONNECTION_TYPE || "Classic",
+  tnsname: ORACLEDBTEST_TNS_NAME,
+  host: ORACLEDBTEST_HOST || "localhost",
+  port: ORACLEDBTEST_PORT || "1521",
+  db: ORACLEDBTEST_DB || "orcl",
+  connectionname: "Live Test Server",
+  poolmin: 0,
+  poolmax: 2,
+  pooltimeout: 30
+};
 
-  var serverNode = new testNodes["oracle-server"](serverConfig);
+// Helper function to simulate a message arriving at a node's input
+function sendMessage(node, msg, done) {
+  node.send = (msgOut) => {
+    console.log("[SEND]", msgOut);
+    done();
+  };
+  node.error = (err) => {
+    done(new Error(err)); // Fail the test if the node calls .error()
+  };
+  nodeListener.emit("input", msg);
+}
 
 
-  it("should create an Oracle database connection", function (done) {
-    serverNode.claimConnection();
-    //new expectLog("Connected to Oracle server ", done);
-    serverNode.status.once("connected", done); // succeeds if status turns to connected
-  });
-
-  it("should successfully execute a query", function (done) {
-    var queryNode = {
-      log: function(msg) {
-        console.log(msg);
-      },
-      error: function(msg) {
-        console.log(msg);
-      },
-      send(msg) {
-        console.log(msg);
-        done();
-      }
-    };
-    serverNode.query({}, queryNode, "select count(*) from employees", [], "single", 100);
-  });
-
-  it("should successfully execute a query with a parameter", function (done) {
-    var queryNode = {
-      log: function(msg) {
-        console.log(msg);
-      },
-      error: function(msg) {
-        console.log(msg);
-      },
-      send(msg) {
-        console.log(msg);
-        done();
-      }
-    };
-    serverNode.query({}, queryNode, "select * from employees where employee_id = :v1", [195], "single", 100);
-  });
+describe("Test Node Registration", function() {
+    it("should register oracledb node", function() {
+        expect(testNodes).to.have.property("oracledb");
+    });
+    it("should register oracle-server node", function() {
+        expect(testNodes).to.have.property("oracle-server");
+    });
 });
 
 
-function sendMessage(node, msg, done) {
-  "use strict";
-    node.log = function(msg) {
-      console.log(msg);
-    };
-    node.error = function(msg) {
-      console.log(msg);
-      done(msg);
-    };
-    node.send = function(msg) {
-      console.log(msg);
+// --- Rewritten Live Database Tests ---
+describe("Live Database Tests", function() {
+  this.timeout(10000); // Increase timeout for potentially slow remote connections
+
+  const canRunLiveTests = !!(ORACLEDBTEST_INSTANT_CLIENT_PATH && ORACLEDBTEST_USER);
+
+  before(function() {
+    if (!canRunLiveTests) {
+      console.warn("\nSkipping live database tests. Please create a .env file with test credentials (see README for details).\n");
+      this.skip();
+    }
+  });
+
+  const serverNode = new testNodes["oracle-server"](serverConfig);
+  
+  it("should create an Oracle database connection pool", function (done) {
+    // FIX THE RACE CONDITION: Check if the pool is already connected.
+    if (serverNode.pool) {
+      // If the pool exists, the "connected" event already fired. We can pass immediately.
+      expect(serverNode.pool).to.not.be.null;
+      return done();
+    }
+    
+    // If the pool is not yet ready, it's safe to listen for the events.
+    serverNode.status.once("connected", () => {
+      expect(serverNode.pool).to.not.be.null;
       done();
-    };
-    nodeListener.emit("input", msg);
-}
-
-describe("Test Oracle query Node function", function() {
-
-  var serverNode = new testNodes["oracle-server"](serverConfig);
+    });
+    
+    serverNode.status.once("error", (err) => {
+      done(new Error(err.message));
+    });
+  });
 
   it("should successfully execute a query", function (done) {
-    var queryConfig = {
-      usequery: true,
-      query: "select count(*) from employees",
-      usemappings: false,
-      resultaction: "single",
-      resultlimit: 100,
-      server: serverNode
+    const queryNode = {
+      log: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        expect(msg.payload).to.be.an("array").with.lengthOf(1);
+        done();
+      }
     };
-    var queryNode = new testNodes["oracledb"](queryConfig);
-    var msg = {
-      payload: []
-    };
+    serverNode.query({}, queryNode, "select 1 from dual", [], "single", 100);
+  });
 
+  it("should successfully execute a query with a parameter", function (done) {
+    const queryNode = {
+      log: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        expect(msg.payload).to.be.an("array").with.lengthOf(1);
+        expect(msg.payload[0].DUMMY).to.equal("X");
+        done();
+      }
+    };
+    serverNode.query({}, queryNode, "select dummy from dual where dummy = :v1", ["X"], "single", 100);
+  });
+
+  it("should run a query via the oracledb node", function (done) {
+    const queryConfig = {
+      name: "Test Query Node",
+      usequery: true,
+      query: "select 'test' as result from dual",
+      resultaction: "single",
+      server: serverNode,
+      usemappings: false,
+      resultlimit: 100
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    const msg = { payload: [] };
     sendMessage(queryNode, msg, done);
   });
 
+  // Clean up the pool after tests are done
+  after(async function() {
+    if(serverNode && serverNode.pool) {
+      await serverNode.pool.close(0);
+    }
+  });
 });

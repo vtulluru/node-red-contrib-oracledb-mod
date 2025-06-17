@@ -1,9 +1,9 @@
 module.exports = function (RED) {
   "use strict";
-  var oracledb = require("oracledb");
-  var resolvePath = require("object-resolve-path");
-  var events = require("events");
-  var util = require("util");
+  const oracledb = require("oracledb");
+  const resolvePath = require("object-resolve-path");
+  const events = require("events");
+  const util = require("util");
   oracledb.fetchAsBuffer = [oracledb.BLOB];
   oracledb.fetchAsString = [oracledb.CLOB];
 
@@ -11,13 +11,15 @@ module.exports = function (RED) {
   function transformBindVars(bindVars) {
     const transformed = {};
     for (const key in bindVars) {
-      const bindVar = bindVars[key];
-      transformed[key] = {
-        dir: oracledb[bindVar.dir],
-        type: oracledb[bindVar.type]
-      };
-      if (bindVar.hasOwnProperty("val")) {
-        transformed[key].val = bindVar.val;
+      if (Object.prototype.hasOwnProperty.call(bindVars, key)) {
+        const bindVar = bindVars[key];
+        transformed[key] = {
+          dir: oracledb[bindVar.dir],
+          type: oracledb[bindVar.type]
+        };
+        if (bindVar.hasOwnProperty("val")) {
+          transformed[key].val = bindVar.val;
+        }
       }
     }
     return transformed;
@@ -25,268 +27,232 @@ module.exports = function (RED) {
 
   function initialize(node) {
     if (node.server) {
-      node.status({ fill: "grey", shape: "dot", text: "unconnected" });
+      if (node.server.pool) {
+        node.status({ fill: "green", shape: "dot", text: "connected" });
+      } else {
+        node.status({ fill: "grey", shape: "dot", text: "unconnected" });
+      }
+
       node.serverStatus = node.server.status;
-      node.serverStatus.on("connecting", function () {
+      node.serverStatus.on("connecting", () => {
         node.status({ fill: "green", shape: "ring", text: "connecting" });
       });
-      node.serverStatus.on("connected", function () {
+      node.serverStatus.on("connected", () => {
         node.status({ fill: "green", shape: "dot", text: "connected" });
       });
-      node.serverStatus.on("closed", function () {
+      node.serverStatus.on("closed", () => {
         node.status({ fill: "red", shape: "ring", text: "disconnected" });
       });
-      node.serverStatus.on("error", function () {
+      node.serverStatus.on("error", () => {
         node.status({ fill: "red", shape: "dot", text: "connect error" });
-      });
-      node.serverStatus.on("reconnecting", function () {
-        node.status({ fill: "red", shape: "ring", text: "reconnecting" });
-      });
-      node.on("close", function () {
-        node.server.freeConnection();
       });
     } else {
       node.status({ fill: "red", shape: "dot", text: "error" });
-      node.error("Oracle " + node.oracleType + " error: missing Oracle server configuration");
+      node.error("Oracle storage error: missing Oracle server configuration");
     }
   }
-  function OracleDb(n) {
-    var node = this;
-    RED.nodes.createNode(node, n);
-    node.useQuery = n.usequery;
-    node.query = n.query;
-    node.useMappings = n.usemappings;
-    try {
-      node.mappings = n.mappings ? JSON.parse(n.mappings) : [];
-    } catch (err) {
-      node.error("Error parsing mappings: " + err.message);
-      node.mappings = [];
-    }
-    node.resultAction = n.resultaction;
-    node.resultLimit = n.resultlimit;
-    node.server = RED.nodes.getNode(n.server);
-    node.oracleType = "storage";
-    node.serverStatus = null;
-    node.on("input", function (msg) {
 
-      var bindVars = null;
-      if (msg.bindVars) {
-        try {
-          bindVars = transformBindVars(msg.bindVars);
-        } catch (err) {
-          node.error("Error transforming bind variables: " + err.message, msg);
-          node.status.emit("error", err);
-          return;
+  function OracleDb(n) {
+    const node = this;
+    RED.nodes.createNode(node, n);
+    node.server = RED.nodes.getNode(n.server);
+
+    node.on("input", (msg) => {
+        if (!node.server) {
+            node.error("Oracle node is not configured with a server.", msg);
+            return;
         }
-      } else {
-        bindVars = [];
-        if (node.useMappings || (msg.payload && !util.isArray(msg.payload))) {
-          for (var i = 0; i < node.mappings.length; i++) {
-            var value = void 0;
+
+        const useQuery = n.usequery;
+        const query = (useQuery || !msg.query) ? n.query : msg.query;
+        const useMappings = n.usemappings;
+        const mappings = n.mappings ? JSON.parse(n.mappings) : [];
+        const resultAction = msg.resultAction || n.resultaction;
+        const resultSetLimit = parseInt(msg.resultSetLimit || n.resultlimit, 10);
+        
+        let bindVars = null;
+        if (msg.bindVars) {
             try {
-              value = resolvePath(msg.payload, node.mappings[i]);
+                bindVars = transformBindVars(msg.bindVars);
             } catch (err) {
-              value = null;
+                node.error("Error transforming bind variables: " + err.message, msg);
+                return;
             }
-            bindVars.push(value);
-          }
         } else {
-          bindVars = msg.payload;
+            bindVars = [];
+            if (useMappings || (msg.payload && !util.isArray(msg.payload))) {
+                for (let i = 0; i < mappings.length; i++) {
+                    let value;
+                    try {
+                        value = resolvePath(msg.payload, mappings[i]);
+                    } catch (err) {
+                        value = null;
+                    }
+                    bindVars.push(value);
+                }
+            } else {
+                bindVars = msg.payload;
+            }
         }
-      }
-      var query;
-      if (node.useQuery || !msg.query) {
-        query = node.query;
-      } else {
-        query = msg.query;
-      }
-      var resultAction = msg.resultAction || node.resultAction;
-      var resultSetLimit = parseInt(msg.resultSetLimit || node.resultLimit, 10);
-      node.server.query(msg, node, query, bindVars, resultAction, resultSetLimit);
+
+        node.server.query(msg, node, query, bindVars, resultAction, resultSetLimit);
     });
+
     initialize(node);
   }
+
   function OracleServer(n) {
-    var node = this;
+    const node = this;
     RED.nodes.createNode(node, n);
     node.connectionname = n.connectionname || "";
     node.tnsname = n.tnsname || "";
-    node.connectiontype = n.connectiontype || "Classic";
     node.instantclientpath = n.instantclientpath || "";
     node.host = n.host || "localhost";
     node.port = n.port || "1521";
     node.db = n.db || "orcl";
-    node.reconnect = n.reconnect;
-    node.reconnectTimeout = n.reconnecttimeout || 5000;
-    node.connectionInProgress = false;
-    node.firstConnection = true;
-    node.connection = null;
-    node.connectString = "";
-    node.queryQueue = [];
-    node.user = node.credentials.user || "hr";
-    node.password = node.credentials.password || "hr";
+    node.user = node.credentials.user;
+    node.password = node.credentials.password;
+    node.poolmin = n.poolmin || 0;
+    node.poolmax = n.poolmax || 4;
+    node.pooltimeout = n.pooltimeout || 60;
+
+    node.pool = null;
     node.status = new events.EventEmitter();
     node.status.setMaxListeners(0);
-    node.claimConnection = function () {
-      node.log("Connection claim started");
-      if (!node.Connection && !node.connectionInProgress) {
-        node.connectionInProgress = true;
-        if (node.firstConnection) {
-          node.status.emit("Connecting with " + node.connectionname);
-        } else {
-          node.status.emit("Reconnecting with " + node.connectionname);
+
+    async function connect() {
+      if (node.pool) return;
+      node.status.emit("connecting");
+      
+      try {
+        if (node.instantclientpath) {
+          oracledb.initOracleClient({ libDir: node.instantclientpath });
         }
-        if (!node.instantclientpath) {
-          node.status.emit("error", "You must set the Instant Client Path!");
-          node.error("You must set the Instant Client Path!");
-        } else {
-          try {
-            oracledb.initOracleClient({ libDir: node.instantclientpath });
-          } catch (err) {
-            // do nothing
-          }
+      } catch (err) {
+        if (err.message.indexOf("NJS-019") === -1) {
+          node.error("Oracle-server error initializing client: " + err.message);
+          node.status.emit("error", err);
+          return;
         }
-        if (node.tnsname) {
-          node.connectString = node.tnsname;
-        } else {
-          node.connectString = node.host + ":" + node.port + (node.db ? "/" + node.db : "");
-        }
-        node.firstConnection = false;
-        oracledb.getConnection({
-          user: node.user,
-          password: node.password,
-          connectString: node.connectString
-        }, function (err, connection) {
-          node.connectionInProgress = false;
-          if (err) {
-            node.status.emit("error", err);
-            node.error("Oracle-server error connection to " + node.connectString + ": " + err.message);
-            if (node.reconnect) {
-              node.log("Retry connection to Oracle server in " + node.reconnectTimeout + " ms");
-              node.reconnecting = setTimeout(node.claimConnection, node.reconnectTimeout);
-            }
-          } else {
-            node.connection = connection;
-            node.status.emit("connected");
-            node.log("Connected to Oracle server " + node.connectString);
-            node.queryQueued();
-            delete node.reconnecting;
-          }
-        });
       }
-      return node.status;
-    };
-    node.freeConnection = function () {
-      if (node.reconnecting) {
-        clearTimeout(node.reconnecting);
-        delete node.reconnecting;
+
+      const connectString = node.tnsname ? node.tnsname : `${node.host}:${node.port}/${node.db}`;
+      const poolConfig = {
+        user: node.user,
+        password: node.password,
+        connectString: connectString,
+        poolMin: node.poolmin,
+        poolMax: node.poolmax,
+        poolIncrement: 1,
+        poolTimeout: node.pooltimeout
+      };
+
+      try {
+        node.pool = await oracledb.createPool(poolConfig);
+        node.status.emit("connected");
+        node.log(`Oracle connection pool created for ${connectString}`);
+      } catch (err) {
+        node.error(`Oracle-server error creating pool for ${connectString}: ${err.message}`);
+        node.status.emit("error", err);
       }
-      if (node.connection) {
-        node.connection.release(function (err) {
-          if (err) {
-            node.error("Oracle-server error closing connection: " + err.message);
-          }
-          node.connection = null;
+    }
+
+    connect();
+
+    node.on("close", async (done) => {
+      if (node.pool) {
+        try {
+          await node.pool.close(10);
+          node.pool = null;
           node.status.emit("closed");
-          node.status.removeAllListeners();
-          node.log("Oracle server connection " + node.connectString + " closed");
-        });
-      }
-    };
-    node.query = function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit) {
-      bindVars = typeof bindVars === "undefined" ? [] : bindVars;
-      requestingNode.log("Oracle query start execution");
-      if (node.connection) {
-        delete node.reconnecting;
-        requestingNode.log("Oracle query execution started");
-        var options = {
-          autoCommit: true,
-          outFormat: oracledb.OBJECT,
-          maxRows: resultSetLimit,
-          resultSet: resultAction === "multi"
-        };
-        //node.warn(query);
-        //node.warn(bindVars);
-        //node.warn(options);
-        node.connection.execute(query, bindVars, options, function (err, result) {
-          if (err) {
-            var errorCode = err.message.slice(0, 9);
-            requestingNode.error("Oracle query error: " + err.message + ", errorCode:" + errorCode, msg);
-            node.status.emit("error", err);
-            requestingNode.log("Checking errors for retry");
-            if (errorCode === "DPI-1080:" || errorCode === "DPI-1010:" || errorCode === "ORA-12541" ||
-              errorCode === "ORA-12514" || errorCode === "ORA-01109" || errorCode === "ORA-03113" ||
-              errorCode === "ORA-03114") {
-              node.connection = null;
-              if (node.reconnect) {
-                requestingNode.log("Oracle server connection lost, retry in " + node.reconnectTimeout + " ms");
-                node.status.emit("reconnecting", "Reconnecting to " + node.connectionname);
-                node.reconnecting = setTimeout(node.query, node.reconnectTimeout, requestingNode,
-                  query, bindVars, resultAction, resultSetLimit);
-              }
-            }
-          } else {
-            switch (resultAction) {
-              case "single":
-                msg.payload = result;
-                requestingNode.send(msg);
-                requestingNode.log("Oracle query single result rows sent");
-                break;
-              case "multi":
-                node.fetchRowsFromResultSet(msg, requestingNode, result.resultSet, resultSetLimit);
-                requestingNode.log("Oracle query multi result rows sent");
-                break;
-              default:
-                requestingNode.log("Oracle query no result rows sent");
-                break;
-            }
-          }
-        });
-      } else {
-        requestingNode.log("Oracle query execution queued");
-        node.queryQueue.push({
-          msg: msg,
-          requestingNode: requestingNode,
-          query: query,
-          bindVars: bindVars,
-          resultAction: resultAction,
-          resultSetLimit: resultSetLimit
-        });
-        node.claimConnection();
-      }
-    };
-    node.fetchRowsFromResultSet = function (msg, requestingNode, resultSet, maxRows) {
-      resultSet.getRows(maxRows, function (err, rows) {
-        if (err) {
-          requestingNode.error("Oracle resultSet error: " + err.message);
-        } else if (rows.length === 0) {
-          resultSet.close(function () {
-            if (err) {
-              requestingNode.error("Oracle error closing resultSet: " + err.message);
-            }
-          });
-        } else {
-          msg.payload = rows;
-          requestingNode.send(msg);
-          requestingNode.log("Oracle query resultSet rows sent");
-          node.fetchRowsFromResultSet(msg, requestingNode, resultSet, maxRows);
+          node.log("Oracle connection pool closed.");
+        } catch (err) {
+          node.error("Error closing Oracle connection pool: " + err.message);
         }
-      });
-    };
-    node.queryQueued = function () {
-      while (node.connection && node.queryQueue.length > 0) {
-        var e = node.queryQueue.shift();
-        node.query(e.msg, e.requestingNode, e.query, e.bindVars, e.resultAction, e.resultSetLimit, e.sendResult);
+      }
+      done();
+    });
+
+    node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit) {
+      if (!node.pool) {
+        await connect();
+        if (!node.pool) {
+            requestingNode.error("Connection pool is not available and could not be created.", msg);
+            return;
+        }
+      }
+
+      // Automatically trim trailing whitespace and remove a trailing semicolon.
+      // This is a major usability improvement for users accustomed to SQL clients.
+      const finalQuery = query.trim().replace(/;$/, "");
+
+      let connection;
+      try {
+        connection = await node.pool.getConnection();
+        const options = { autoCommit: true, outFormat: oracledb.OBJECT, maxRows: resultSetLimit, resultSet: resultAction === "multi" };
+        const result = await connection.execute(finalQuery, bindVars || [], options);
+
+        switch (resultAction) {
+          case "single": {
+            msg.payload = result.rows;
+            requestingNode.send(msg);
+            break;
+          }
+          case "single-meta": {
+            msg.payload = {
+                rowsAffected: result.rowsAffected,
+                metaData: result.metaData,
+                outBinds: result.outBinds
+            };
+            requestingNode.send(msg);
+            break;
+          }
+          case "multi": {
+            if (result.resultSet) {
+                const resultSet = result.resultSet;
+                let rows;
+                do {
+                    rows = await resultSet.getRows(resultSetLimit);
+                    if (rows.length > 0) {
+                        const newMsg = RED.util.cloneMessage(msg);
+                        newMsg.payload = rows;
+                        requestingNode.send(newMsg);
+                    }
+                } while (rows.length > 0);
+                await resultSet.close();
+            }
+            break;
+          }
+          case "none":
+          default:
+            break;
+        }
+      } catch (err) {
+        requestingNode.error(`Oracle query error: ${err.message}`, msg);
+        
+        const shortError = err.message.split("\n")[0];
+        requestingNode.status({ fill: "red", shape: "dot", text: shortError });
+        
+        // Restore the 'connected' status after the error timeout, not an empty status.
+        // This provides better user feedback, showing the connection is still healthy.
+        setTimeout(() => {
+            requestingNode.status({ fill: "green", shape: "dot", text: "connected" }); 
+        }, 5000);
+        
+      } finally {
+        if (connection) {
+          try {
+            await connection.close();
+          } catch (err) {
+            requestingNode.error("Error releasing connection: " + err.message);
+          }
+        }
       }
     };
   }
+
   RED.nodes.registerType("oracledb", OracleDb);
   RED.nodes.registerType("oracle-server", OracleServer, {
-    credentials: {
-      user: { type: "text" },
-      password: { type: "password" }
-    }
+    credentials: { user: { type: "text" }, password: { type: "password" } }
   });
 };
-
-//# sourceMappingURL=oracledb.js.map

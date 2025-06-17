@@ -1,5 +1,5 @@
 //to do: Node RED type definitions
-declare var RED: any;
+declare let RED: any;
 
 //
 // -- oracledb -------------------------------------------------------------------------------------
@@ -15,7 +15,7 @@ RED.nodes.registerType("oracledb", {
                         "\n\t\t:valueOfValuesArrayIndex0," +
                         "\n\t\t:valueOfValuesArrayIndex1," +
                         "\n\t\t:valueOfValuesArrayIndex2," +
-                        "\n\t\)"},
+                        "\n\t)"},
         usemappings: { value: false},
         mappings: { value: "[" +
                             "\n\t\"location.of.first.array.index.field.in.msg.payload\"," +
@@ -39,8 +39,8 @@ RED.nodes.registerType("oracledb", {
     },
     oneditprepare: function () {
         // use query editor
-        var queryField = $("#node-input-query");
-        var queryEditor = RED.editor.createEditor({
+        const queryField = $("#node-input-query");
+        const queryEditor = RED.editor.createEditor({
             id: "node-input-query-editor",
             mode: "ace/mode/sql", // unfortunately not yet included in the node-red version of ace
             value: queryField.val()
@@ -50,8 +50,8 @@ RED.nodes.registerType("oracledb", {
         });
 
         // use mappings editor
-        var mappingsField = $("#node-input-mappings");
-        var mappingsEditor = RED.editor.createEditor({
+        const mappingsField = $("#node-input-mappings");
+        const mappingsEditor = RED.editor.createEditor({
             id: "node-input-mappings-editor",
             mode: "ace/mode/json",
             value: mappingsField.val()
@@ -60,8 +60,8 @@ RED.nodes.registerType("oracledb", {
           mappingsField.val(mappingsEditor.getSession().getValue());
         });
 
-        var visibleTab = "query";
-        var tabs = RED.tabs.create({
+        let visibleTab = "query";
+        const tabs = RED.tabs.create({
             id: "node-input-oracle-out-tabs",
             onchange: function (tab) {
                 $("#node-input-oracle-out-tabs-content").children().hide();
@@ -97,14 +97,14 @@ RED.nodes.registerType("oracledb", {
         setTimeout(function() { tabs.resize(); }, 0);
 
         // resize editor areas to fit the edit window
-        function functionDialogResize() {
-            var height = $("#dialog-form").height();
+        const functionDialogResize = () => {
+            let height = $("#dialog-form").height();
             height -= $("#node-input-oracle-out-tabs").outerHeight(true);
-            var rows = $("#oracle-out-tab-" + visibleTab + ">div:not(.node-input-" + visibleTab + "-text-editor-row)");
-            for (var i = 0; i < rows.length; i++) {
+            const rows = $("#oracle-out-tab-" + visibleTab + ">div:not(.node-input-" + visibleTab + "-text-editor-row)");
+            for (let i = 0; i < rows.length; i++) {
                 height -= $(rows[i]).outerHeight(true);
             }
-            var editorRow = $("#dialog-form>div.node-input-" + visibleTab + "-text-editor-row");
+            const editorRow = $("#dialog-form>div.node-input-" + visibleTab + "-text-editor-row");
             if (editorRow.css("marginTop")) {
                 height -= parseInt(editorRow.css("marginTop"), 10);
             }
@@ -118,19 +118,18 @@ RED.nodes.registerType("oracledb", {
             } else {
                 mappingsEditor.resize();
             }
-        }
-        var d = (<any>$("#dialog"));
+        };
+        const d = (<any>$("#dialog"));
         d.on("dialogresize", functionDialogResize);
-        d.one("dialogopen", function(ev) {
-            var size = d.dialog("option", "sizeCache-function");
+        d.one("dialogopen", () => {
+            const size = d.dialog("option", "sizeCache-function");
             if (size) {
                 d.dialog("option", "width", size.width);
                 d.dialog("option", "height", size.height);
                 functionDialogResize();
             }
         });
-        d.one("dialogclose", function(ev, ui) {
-            var height = d.dialog("option", "height");
+        d.one("dialogclose", () => {
             d.off("dialogresize", functionDialogResize);
         });
     }

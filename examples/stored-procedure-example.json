@@ -1,0 +1,104 @@
+[
+    {
+        "id": "a1b2c3d4.e5f6g7",
+        "type": "comment",
+        "z": "5a6b7c8d.9e0f12",
+        "name": "How to Call a Stored Procedure",
+        "info": "This example demonstrates how to call an Oracle stored procedure or function that has OUT parameters.\n\nThe key is to use `msg.bindVars` to define the direction and type of each parameter.",
+        "x": 230,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "1a2b3c4d.5e6f78",
+        "type": "inject",
+        "z": "5a6b7c8d.9e0f12",
+        "name": "Trigger with Input Value",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"inputValue\":\"TEST_VALUE\"}",
+        "payloadType": "json",
+        "x": 220,
+        "y": 280,
+        "wires": [
+            [
+                "9d8c7b6a.5f4e32"
+            ]
+        ]
+    },
+    {
+        "id": "9d8c7b6a.5f4e32",
+        "type": "function",
+        "z": "5a6b7c8d.9e0f12",
+        "name": "Prepare msg.bindVars",
+        "func": "// 1. Define the PL/SQL block to execute.\nmsg.query = \"BEGIN :output := example_function(input_param => :input_param); END;\";\n\n// 2. Define the bind variables with direction and type.\n// The keys ('output', 'input_param') must match the names in the query.\nmsg.bindVars = {\n    output: { dir: \"BIND_OUT\", type: \"STRING\", maxSize: 2000 },\n    input_param: { dir: \"BIND_IN\", type: \"STRING\", val: msg.payload.inputValue }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 280,
+        "wires": [
+            [
+                "e5f4d3c2.1a0b1c"
+            ]
+        ]
+    },
+    {
+        "id": "e5f4d3c2.1a0b1c",
+        "type": "oracledb",
+        "z": "5a6b7c8d.9e0f12",
+        "server": "",
+        "name": "Execute Function",
+        "usequery": false,
+        "query": "",
+        "usemappings": false,
+        "mappings": "[]",
+        "resultaction": "single-meta",
+        "resultlimit": "100",
+        "x": 670,
+        "y": 280,
+        "wires": [
+            [
+                "f1e2d3c4.b5a678"
+            ]
+        ]
+    },
+    {
+        "id": "f1e2d3c4.b5a678",
+        "type": "debug",
+        "z": "5a6b7c8d.9e0f12",
+        "name": "Display OUT Binds",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload.outBinds",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 880,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "h8i9j0k1.l2m3n4",
+        "type": "comment",
+        "z": "5a6b7c8d.9e0f12",
+        "name": "IMPORTANT",
+        "info": "1. Select your oracle-server configuration in the \"Execute Function\" node.\n\n2. Set the Action to \"send single message with metadata\" to get the `outBinds` in the result.",
+        "x": 670,
+        "y": 220,
+        "wires": []
+    }
+]
