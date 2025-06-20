@@ -212,7 +212,7 @@ If you need to run multiple independent queries, especially `SELECT` statements,
 
   
 
-## What's New in Version 0.7.0
+## What's New in Version 0.7.3
 
   
 
