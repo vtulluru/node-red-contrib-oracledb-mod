@@ -3,11 +3,9 @@ module.exports = function (RED) {
   const oracledb = require("oracledb");
   const resolvePath = require("object-resolve-path");
   const events = require("events");
-  const util = require("util");
   oracledb.fetchAsBuffer = [oracledb.BLOB];
   oracledb.fetchAsString = [oracledb.CLOB];
 
-  // Function to transform bind variables
   function transformBindVars(bindVars) {
     const transformed = {};
     for (const key in bindVars) {
@@ -32,10 +30,9 @@ module.exports = function (RED) {
       } else {
         node.status({ fill: "grey", shape: "dot", text: "unconnected" });
       }
-
       node.serverStatus = node.server.status;
       node.serverStatus.on("connecting", () => {
-        node.status({ fill: "green", shape: "ring", text: "connecting" });
+        node.status({ fill: "green", shape: "ring", text: "connecting..." });
       });
       node.serverStatus.on("connected", () => {
         node.status({ fill: "green", shape: "dot", text: "connected" });
@@ -43,8 +40,9 @@ module.exports = function (RED) {
       node.serverStatus.on("closed", () => {
         node.status({ fill: "red", shape: "ring", text: "disconnected" });
       });
-      node.serverStatus.on("error", () => {
-        node.status({ fill: "red", shape: "dot", text: "connect error" });
+      node.serverStatus.on("error", (err) => {
+        const shortError = err.message.split("\n")[0];
+        node.status({ fill: "red", shape: "dot", text: shortError });
       });
     } else {
       node.status({ fill: "red", shape: "dot", text: "error" });
@@ -62,25 +60,61 @@ module.exports = function (RED) {
             node.error("Oracle node is not configured with a server.", msg);
             return;
         }
-
+        
+        node.status({ fill: "blue", shape: "dot", text: "running..." });
+        
         const useQuery = n.usequery;
         const query = (useQuery || !msg.query) ? n.query : msg.query;
         const useMappings = n.usemappings;
-        const mappings = n.mappings ? JSON.parse(n.mappings) : [];
+        let mappings = [];
+        try {
+            mappings = n.mappings ? JSON.parse(n.mappings) : [];
+        } catch(e) {
+            node.error("Error parsing Field Mappings JSON: " + e.message, msg);
+            node.status({ fill: "red", shape: "dot", text: "Invalid Mappings" });
+            return;
+        }
+
         const resultAction = msg.resultAction || n.resultaction;
-        const resultSetLimit = parseInt(msg.resultSetLimit || n.resultlimit, 10);
+        const resultSetLimit = parseInt(msg.resultSetLimit || n.resultlimit, 10) || 100;
         
         let bindVars = null;
+
         if (msg.bindVars) {
             try {
                 bindVars = transformBindVars(msg.bindVars);
             } catch (err) {
                 node.error("Error transforming bind variables: " + err.message, msg);
+                node.status({ fill: "red", shape: "dot", text: "Invalid BindVars" });
                 return;
             }
+        } else if (msg.payload && typeof msg.payload === "object" && !Array.isArray(msg.payload) && !useMappings) {
+            const queryBinds = new Set<string>(); // Specify that the Set contains strings
+            const regex = /:(\w+)/g;
+            let match;
+            while ((match = regex.exec(query)) !== null) {
+                queryBinds.add(match[1]);
+            }
+
+            if (queryBinds.size > 0) {
+                const cleanBinds = {};
+                // --- THIS IS THE FIX ---
+                // We cast msg.payload to `any` to tell TypeScript that we know what we are doing
+                // and that it's safe to access properties on it using our string keys.
+                const payloadAsAny = msg.payload as any; 
+
+                queryBinds.forEach(bindName => {
+                    if (payloadAsAny.hasOwnProperty(bindName)) {
+                        cleanBinds[bindName] = payloadAsAny[bindName];
+                    }
+                });
+                bindVars = cleanBinds;
+            } else {
+                bindVars = {};
+            }
         } else {
-            bindVars = [];
-            if (useMappings || (msg.payload && !util.isArray(msg.payload))) {
+            const params = [];
+            if (useMappings && msg.payload && !Array.isArray(msg.payload)) {
                 for (let i = 0; i < mappings.length; i++) {
                     let value;
                     try {
@@ -88,11 +122,12 @@ module.exports = function (RED) {
                     } catch (err) {
                         value = null;
                     }
-                    bindVars.push(value);
+                    params.push(value);
                 }
-            } else {
-                bindVars = msg.payload;
+            } else if (Array.isArray(msg.payload)) {
+                params.push(...msg.payload);
             }
+            bindVars = params;
         }
 
         node.server.query(msg, node, query, bindVars, resultAction, resultSetLimit);
@@ -136,7 +171,7 @@ module.exports = function (RED) {
         }
       }
 
-      const connectString = node.tnsname ? node.tnsname : `${node.host}:${node.port}/${node.db}`;
+      const connectString = n.tnsname ? n.tnsname : `${node.host}:${node.port}/${node.db}`;
       const poolConfig = {
         user: node.user,
         password: node.password,
@@ -152,7 +187,6 @@ module.exports = function (RED) {
         node.status.emit("connected");
         node.log(`Oracle connection pool created for ${connectString}`);
       } catch (err) {
-        node.error(`Oracle-server error creating pool for ${connectString}: ${err.message}`);
         node.status.emit("error", err);
       }
     }
@@ -175,22 +209,20 @@ module.exports = function (RED) {
 
     node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit) {
       if (!node.pool) {
-        await connect();
-        if (!node.pool) {
-            requestingNode.error("Connection pool is not available and could not be created.", msg);
-            return;
-        }
+        const errText = "Connection pool is not available.";
+        requestingNode.error(errText, msg);
+        requestingNode.status({ fill: "red", shape: "dot", text: errText });
+        return;
       }
 
-      // Automatically trim trailing whitespace and remove a trailing semicolon.
-      // This is a major usability improvement for users accustomed to SQL clients.
       const finalQuery = query.trim().replace(/;$/, "");
-
       let connection;
       try {
         connection = await node.pool.getConnection();
         const options = { autoCommit: true, outFormat: oracledb.OBJECT, maxRows: resultSetLimit, resultSet: resultAction === "multi" };
         const result = await connection.execute(finalQuery, bindVars || [], options);
+        
+        requestingNode.status({ fill: "green", shape: "dot", text: "connected" });
 
         switch (resultAction) {
           case "single": {
@@ -228,16 +260,9 @@ module.exports = function (RED) {
             break;
         }
       } catch (err) {
-        requestingNode.error(`Oracle query error: ${err.message}`, msg);
-        
         const shortError = err.message.split("\n")[0];
+        requestingNode.error(`Oracle query error: ${shortError}`, msg);
         requestingNode.status({ fill: "red", shape: "dot", text: shortError });
-        
-        // Restore the 'connected' status after the error timeout, not an empty status.
-        // This provides better user feedback, showing the connection is still healthy.
-        setTimeout(() => {
-            requestingNode.status({ fill: "green", shape: "dot", text: "connected" }); 
-        }, 5000);
         
       } finally {
         if (connection) {

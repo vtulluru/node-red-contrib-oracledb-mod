@@ -34,11 +34,7 @@ const REDmock = {
           node[key] = config[key];
         }
       }
-      // Provide credentials from the test environment
-      node.credentials = {
-        user: ORACLEDBTEST_USER,
-        password: ORACLEDBTEST_PASSWORD
-      };
+      node.credentials = { user: ORACLEDBTEST_USER, password: ORACLEDBTEST_PASSWORD };
       node.log = (msg) => console.log(`[LOG] ${msg}`);
       node.error = (msg) => console.error(`[ERROR] ${msg}`);
       node.warn = (msg) => console.warn(`[WARN] ${msg}`);
@@ -48,13 +44,16 @@ const REDmock = {
     registerType: function (nodeName, constructor) {
       testNodes[nodeName] = constructor;
     },
-    getNode: (id) => id
+    getNode: (id) => id,
+    // Add the RED.util.cloneMessage mock
+    util: {
+        cloneMessage: (msg) => JSON.parse(JSON.stringify(msg))
+    }
   }
 };
 
 oracleNodes(REDmock);
 
-// --- Build the server configuration based on the environment ---
 const serverConfig = {
   instantclientpath: ORACLEDBTEST_INSTANT_CLIENT_PATH,
   connectiontype: ORACLEDBTEST_CONNECTION_TYPE || "Classic",
@@ -68,14 +67,13 @@ const serverConfig = {
   pooltimeout: 30
 };
 
-// Helper function to simulate a message arriving at a node's input
 function sendMessage(node, msg, done) {
   node.send = (msgOut) => {
     console.log("[SEND]", msgOut);
     done();
   };
   node.error = (err) => {
-    done(new Error(err)); // Fail the test if the node calls .error()
+    done(new Error(err));
   };
   nodeListener.emit("input", msg);
 }
@@ -91,15 +89,14 @@ describe("Test Node Registration", function() {
 });
 
 
-// --- Rewritten Live Database Tests ---
 describe("Live Database Tests", function() {
-  this.timeout(10000); // Increase timeout for potentially slow remote connections
+  this.timeout(10000);
 
   const canRunLiveTests = !!(ORACLEDBTEST_INSTANT_CLIENT_PATH && ORACLEDBTEST_USER);
 
   before(function() {
     if (!canRunLiveTests) {
-      console.warn("\nSkipping live database tests. Please create a .env file with test credentials (see README for details).\n");
+      console.warn("\nSkipping live database tests. Please create a .env file with test credentials.\n");
       this.skip();
     }
   });
@@ -107,19 +104,14 @@ describe("Live Database Tests", function() {
   const serverNode = new testNodes["oracle-server"](serverConfig);
   
   it("should create an Oracle database connection pool", function (done) {
-    // FIX THE RACE CONDITION: Check if the pool is already connected.
     if (serverNode.pool) {
-      // If the pool exists, the "connected" event already fired. We can pass immediately.
       expect(serverNode.pool).to.not.be.null;
       return done();
     }
-    
-    // If the pool is not yet ready, it's safe to listen for the events.
     serverNode.status.once("connected", () => {
       expect(serverNode.pool).to.not.be.null;
       done();
     });
-    
     serverNode.status.once("error", (err) => {
       done(new Error(err.message));
     });
@@ -128,6 +120,7 @@ describe("Live Database Tests", function() {
   it("should successfully execute a query", function (done) {
     const queryNode = {
       log: () => {},
+      status: () => {}, // Add the mock status function
       error: (msg) => done(new Error(msg)),
       send: (msg) => {
         expect(msg.payload).to.be.an("array").with.lengthOf(1);
@@ -140,6 +133,7 @@ describe("Live Database Tests", function() {
   it("should successfully execute a query with a parameter", function (done) {
     const queryNode = {
       log: () => {},
+      status: () => {}, // Add the mock status function
       error: (msg) => done(new Error(msg)),
       send: (msg) => {
         expect(msg.payload).to.be.an("array").with.lengthOf(1);
@@ -158,6 +152,7 @@ describe("Live Database Tests", function() {
       resultaction: "single",
       server: serverNode,
       usemappings: false,
+      mappings: "[]",
       resultlimit: 100
     };
     const queryNode = new testNodes["oracledb"](queryConfig);
@@ -165,7 +160,6 @@ describe("Live Database Tests", function() {
     sendMessage(queryNode, msg, done);
   });
 
-  // Clean up the pool after tests are done
   after(async function() {
     if(serverNode && serverNode.pool) {
       await serverNode.pool.close(0);
