@@ -46,7 +46,7 @@
         "@typescript-eslint/parser": "^7.13.0",
         "chai": "^4.3.10",
         "del": "^8.0.0",
-        "eslint": "^8.57.0",
+        "eslint": "^9.30.1",
         "gulp": "^5.0.1",
         "gulp-add-src": "^1.0.0",
         "gulp-concat": "^2.6.1",
