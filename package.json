@@ -58,6 +58,6 @@
         "gulp-cli": "^3.0.0",
         "merge2": "^1.4.1",
         "source-map-support": "^0.5.21",
-        "dotenv": "^16.4.5"
+        "dotenv": "^17.2.1"
     }
 }
