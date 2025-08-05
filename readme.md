@@ -241,10 +241,3 @@ This is a major stability and modernization release.
 
 
 [View more commits and changelog](https://github.com/vtulluru/node-red-contrib-oracledb-mod/commits)
-
-
-### Summary of Changes
-
-1.  **New `v0.7.5` Section:** A concise entry is added at the top, clearly stating the critical bug that was fixed and linking to the GitHub issue. This is exactly what users look for in a patch release.
-2.  **Updated `v0.7.4` Section:** The previous release notes are simplified to be a historical record, focusing on the features and fixes delivered in that version.
-3.  **Updated Features List:** I've added "Smart Named Binding" and "Intelligent Node Status" to the main features list, as these are now core, stable features of your node.
