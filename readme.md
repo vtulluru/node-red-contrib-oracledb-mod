@@ -212,10 +212,17 @@ If you need to run multiple independent queries, especially `SELECT` statements,
 
   
 
-## What's New in Version 0.7.3
+## What's New
+### Version 0.7.5
+-   **Fixed:** Corrected a critical startup crash (`NJS-007` error) that occurred when importing flows with a configured connection pool. Flows are now fully portable. (Fixes [#90](https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues/90)).
 
+### Version 0.7.4
+-   **Feature:** Added Smart Named Binding to automatically handle `msg.payload` objects and prevent `ORA-01036` errors.
+-   **Feature:** Implemented more intelligent and persistent node status feedback for running queries and errors.
+-   **Fixed:** Resolved an upgrade issue where existing `oracle-server` nodes would be marked as invalid.
+-   **Fixed:** Corrected a `type_already_registered` startup error by overhauling the build process.
   
-
+### Version 0.7.3
 This is a major stability and modernization release.
 
   
@@ -232,6 +239,12 @@ This is a major stability and modernization release.
 
 -  **Added Examples:** A built-in example flow for stored procedures is now included.
 
-  
 
 [View more commits and changelog](https://github.com/vtulluru/node-red-contrib-oracledb-mod/commits)
+
+
+### Summary of Changes
+
+1.  **New `v0.7.5` Section:** A concise entry is added at the top, clearly stating the critical bug that was fixed and linking to the GitHub issue. This is exactly what users look for in a patch release.
+2.  **Updated `v0.7.4` Section:** The previous release notes are simplified to be a historical record, focusing on the features and fixes delivered in that version.
+3.  **Updated Features List:** I've added "Smart Named Binding" and "Intelligent Node Status" to the main features list, as these are now core, stable features of your node.
