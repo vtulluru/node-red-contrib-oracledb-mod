@@ -42,7 +42,7 @@
     "devDependencies": {
         "@types/jquery": "^3.5.32",
         "@types/mocha": "^10.0.10",
-        "@typescript-eslint/eslint-plugin": "^7.13.0",
+        "@typescript-eslint/eslint-plugin": "^8.46.0",
         "@typescript-eslint/parser": "^7.13.0",
         "chai": "^4.3.10",
         "del": "^8.0.0",
