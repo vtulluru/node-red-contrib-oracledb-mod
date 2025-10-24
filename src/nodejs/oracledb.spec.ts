@@ -160,6 +160,77 @@ describe("Live Database Tests", function() {
     sendMessage(queryNode, msg, done);
   });
 
+  it("should successfully execute a simple PL/SQL block", function (done) {
+    const queryNode = {
+      log: () => {},
+      status: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        // For PL/SQL blocks, we expect metadata result
+        expect(msg.payload).to.be.an("object");
+        done();
+      }
+    };
+    // Test a simple PL/SQL block that should work with the fix
+    serverNode.query({}, queryNode, "BEGIN NULL; END;", [], "single-meta", 100);
+  });
+
+  it("should successfully execute a PL/SQL block with DBMS_OUTPUT", function (done) {
+    const queryNode = {
+      log: () => {},
+      status: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        expect(msg.payload).to.be.an("object");
+        done();
+      }
+    };
+    // Test PL/SQL block with DBMS_OUTPUT
+    serverNode.query({}, queryNode, "BEGIN DBMS_OUTPUT.PUT_LINE('Test'); END;", [], "single-meta", 100);
+  });
+
+  it("should successfully execute a PL/SQL block with bind variables", function (done) {
+    const queryNode = {
+      log: () => {},
+      status: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        expect(msg.payload).to.be.an("object");
+        // Just check that we got a result without ORA-06550 error
+        done();
+      }
+    };
+    
+    // Use the oracledb constants directly (these are the numeric values)
+    const oracledb = require("oracledb");
+    const bindVars = {
+      result: { dir: oracledb.BIND_OUT, type: oracledb.STRING }
+    };
+    
+    // Test PL/SQL block with OUT bind variable
+    serverNode.query({}, queryNode, "BEGIN :result := 'Success'; END;", bindVars, "single-meta", 100);
+  });
+
+  it("should successfully execute a DECLARE block", function (done) {
+    const queryNode = {
+      log: () => {},
+      status: () => {},
+      error: (msg) => done(new Error(msg)),
+      send: (msg) => {
+        expect(msg.payload).to.be.an("object");
+        done();
+      }
+    };
+    
+    const plsqlBlock = `DECLARE
+      v_count NUMBER;
+    BEGIN
+      SELECT COUNT(*) INTO v_count FROM dual;
+    END;`;
+    
+    serverNode.query({}, queryNode, plsqlBlock, [], "single-meta", 100);
+  });
+
   after(async function() {
     if(serverNode && serverNode.pool) {
       await serverNode.pool.close(0);

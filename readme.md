@@ -210,9 +210,62 @@ If you need to run multiple independent queries, especially `SELECT` statements,
 
 `Inject` → `[ oracledb (SELECT from table A) ]` → `[ oracledb (SELECT from table B) ]` → `...`
 
-  
+## Troubleshooting
+
+### ORA-06550 Error with BEGIN/END Blocks
+
+**Problem**: `ORA-06550: line 1, column X: PLS-00103: Encountered the symbol "END" when expecting...`
+
+**Solution**: Fixed in version 0.7.6+. The module now intelligently detects PL/SQL blocks and preserves their required semicolons.
+
+**Examples that now work correctly**:
+
+```sql
+-- ✅ Simple anonymous PL/SQL block
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello World');
+END;
+
+-- ✅ PL/SQL block with variables
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM dual;
+    DBMS_OUTPUT.PUT_LINE('Count: ' || v_count);
+END;
+
+-- ✅ PL/SQL block with bind variables
+BEGIN
+    :result := 'Success';
+END;
+```
+
+**Best Practices**:
+- Always include semicolons with PL/SQL blocks: `BEGIN...END;`
+- Use `"single-meta"` result action for blocks with OUT parameters
+- Ensure proper bind variable configuration for IN/OUT parameters
+
+### Other Common Issues
+
+**ORA-00933: SQL command not properly ended**
+- This affects regular SQL statements, not PL/SQL blocks
+- The module automatically handles this for SQL statements
+
+**ORA-01036: Illegal variable name/number**
+- Check your bind variable names match those in your query
+- Ensure bind variables are properly formatted in `msg.bindVars`
+
+**Connection Issues**
+- Verify Oracle Instant Client is properly installed and configured
+- Check connection pool settings in the oracle-server node
+- Ensure your Oracle user has necessary privileges
 
 ## What's New
+### Version 0.7.6
+-   **Fixed:** Resolved ORA-06550 errors when executing PL/SQL blocks with `BEGIN...END;` statements. The module now intelligently preserves semicolons for PL/SQL blocks while removing them for regular SQL statements. (Fixes [#126](https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues/126)).
+-   **Enhanced:** Added comprehensive test coverage for PL/SQL block execution scenarios.
+-   **Documentation:** Added detailed troubleshooting guide for PL/SQL-related issues.
+
 ### Version 0.7.5
 -   **Fixed:** Corrected a critical startup crash (`NJS-007` error) that occurred when importing flows with a configured connection pool. Flows are now fully portable. (Fixes [#90](https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues/90)).
 

@@ -119,7 +119,7 @@ module.exports = function (RED) {
                     let value;
                     try {
                         value = resolvePath(msg.payload, mappings[i]);
-                    } catch (err) {
+                    } catch {
                         value = null;
                     }
                     params.push(value);
@@ -207,6 +207,20 @@ module.exports = function (RED) {
       done();
     });
 
+    // Function to detect if a query is a PL/SQL block
+    function isPLSQLBlock(query: string): boolean {
+      const trimmedQuery = query.trim().toUpperCase();
+      
+      // Check for common PL/SQL block patterns
+      const plsqlPatterns = [
+        /^BEGIN\s/,           // Starts with BEGIN
+        /^DECLARE\s/,         // Starts with DECLARE
+        /\bBEGIN\s.*\bEND\s*;?\s*$/s  // Contains BEGIN...END pattern
+      ];
+      
+      return plsqlPatterns.some(pattern => pattern.test(trimmedQuery));
+    }
+
     node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit) {
       if (!node.pool) {
         const errText = "Connection pool is not available.";
@@ -215,7 +229,10 @@ module.exports = function (RED) {
         return;
       }
 
-      const finalQuery = query.trim().replace(/;$/, "");
+      // For PL/SQL blocks, preserve the semicolon as it's required for compilation
+      // For regular SQL statements, remove trailing semicolon to avoid ORA-00933 errors
+      const trimmedQuery = query.trim();
+      const finalQuery = isPLSQLBlock(trimmedQuery) ? trimmedQuery : trimmedQuery.replace(/;$/, "");
       let connection;
       try {
         connection = await node.pool.getConnection();
