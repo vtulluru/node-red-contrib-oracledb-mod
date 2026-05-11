@@ -24,7 +24,8 @@ RED.nodes.registerType("oracledb", {
                             "\n]"},
         server: { type: "oracle-server", required: true },
         resultaction: {value: "multi"},
-        resultlimit: {value: 100}
+        resultlimit: {value: 100},
+        usemany: {value: false}
     },
     inputs: 1,
     outputs: 1,
