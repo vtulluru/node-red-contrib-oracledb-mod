@@ -54,6 +54,11 @@
                 <label for="node-input-resultlimit"><i class="fa fa-bars"></i> Msg rows</label>
                 <input type="text" id="node-input-resultlimit" style="width: 80px;"> (maximum # of result rows per message)
             </div>
+            <hr/>
+            <div class="form-row" style="margin-bottom: 0px">
+                <input type="checkbox" id="node-input-usemany" style="display: inline-block; width: auto; vertical-align: top;">
+                <label for="node-input-usemany" style="width: 80%;"> Batch mode (executeMany) &mdash; <i>msg.payload</i> is an array of bind objects/arrays</label>
+            </div>
         </div>
     </div>
 </script>
@@ -99,6 +104,13 @@
       </dd>
   </dl>
   
+  <h3>Batch mode (executeMany)</h3>
+  <p>Enable <b>Batch mode</b> (or set <code>msg.executeMany = true</code>) to insert/update many rows in a single round-trip. <code>msg.payload</code> must be an array of bind objects (named binds) or array of arrays (positional). The node sends a single output message with <code>{ rowsAffected, outBinds, batchErrors }</code>.</p>
+  <pre>// 1000-row insert in one call
+msg.payload = [ {id:1, name:"a"}, {id:2, name:"b"}, /* ... */ ];
+msg.executeMany = true;
+// query: INSERT INTO t (id, name) VALUES (:id, :name)</pre>
+
   <h3>Executing Scripts</h3>
   <p>
       The node executes a single SQL statement or a single PL/SQL block at a time. To run multiple DML statements (<code>INSERT</code>, <code>UPDATE</code>, etc.) as a single transaction, wrap them in a <code>BEGIN...END;</code> block. To run multiple sequential queries, chain multiple <b>oracledb</b> nodes together in your flow.

@@ -12,13 +12,110 @@ Robust, modern, and easy-to-use Node-RED nodes for interacting with Oracle Datab
 
 This module provides a stable connection to Oracle, supporting queries, DML, stored procedures, and advanced data binding, all handled through a resilient connection pool.
 
-  
+---
+
+## What's new in 0.8.0
+
+- **Thin mode is now the default** — no Oracle Instant Client install required for most users (Oracle 12.1+, Autonomous Database, wallets all work). Existing configs that had an Instant Client path keep running in thick mode for backwards compatibility, with a one-time migration warning.
+- **First-class wallet / Autonomous Database support** — Wallet / TNS_ADMIN, Wallet Location, Wallet Password are now config fields. TNS_ADMIN env var is auto-detected and pre-fills the dialog.
+- **TNS Name dropdown** — aliases are parsed from your wallet's `tnsnames.ora` and offered as a combo box.
+- **Test Connection button** — one-click verification with rich output (server host, service, database, user, current schema, accessible schemas, wallet aliases, connect + total timing).
+- **Pool Stats panel** — live `connectionsInUse / connectionsOpen`, queue length, **peak in-use** and **peak queued** high-water marks since the pool started. Refreshes every 2 s while open and surfaces sizing hints (e.g. "consider raising Max Connections" when peak hits `poolMax`).
+- **Pool-pressure visibility** — query nodes show `waiting for pool slot... (4/4)` when `getConnection()` blocks; NJS-040 errors now read `pool exhausted: 4/4 in use, 3 queued, waited 60000ms` instead of the bare timeout.
+- **executeMany batch mode** — insert thousands of rows per round-trip via a new "Batch mode" checkbox or `msg.executeMany = true`.
+- **Automatic retry on transient errors** — NJS-003/040, ORA-03113/03114/12170/12541/12537/12514 are retried with exponential backoff. Tunable per server config.
+- **Richer pool tuning** — `poolIncrement`, `queueTimeout`, `stmtCacheSize` exposed in the UI.
+- **`msg.oracle` stats sidecar** — every result message carries `{ durationMs, mode, rows, rowsAffected }`. Streamed (multi) results also include `chunkIndex` / `totalRowsSoFar`.
+- **Node status badges** — successful queries briefly show `N rows · 23ms`; errors stay red for 5s.
+- **Engines bumped to Node ≥ 18**. CI now runs the full test suite on Node 18/20/22 before publish.
+
+---
+
+## Driver Modes (Thin vs Thick)
+
+| Use case | Mode |
+| --- | --- |
+| Oracle 12.1+, including Autonomous Database | **Thin** (default) — no install needed |
+| Oracle 11g servers | **Thick** |
+| Advanced Queuing (AQ), Continuous Query Notification (CQN), sharding | **Thick** |
+
+Switch via the **Driver Mode** dropdown in the oracle-server config. Only one mode can be active per Node-RED process, and switching from thin → thick requires a process restart.
+
+## Wallet / Autonomous Database
+
+For OCI Autonomous Database:
+
+1. Download the wallet zip from the OCI console.
+2. Unzip it on the host (e.g. `/opt/oracle/network/admin`).
+3. In the config node, set **TNS_ADMIN** to that directory — or just set the `TNS_ADMIN` environment variable and leave the field blank; the dialog auto-detects it.
+4. The **TNS Name** dropdown will populate from the wallet's `tnsnames.ora`. Pick one (e.g. `mydb_high`).
+5. Fill **User** + **Password** on the Security tab. If your wallet is the standard ADB wallet with an SSO file, leave **Wallet Password** blank.
+
+Click **Test Connection** to verify before deploying.
+
+## Connection Pool Tuning
+
+All settings are on the Connection tab of the oracle-server config:
+
+| Field | Default | What it does |
+| --- | --- | --- |
+| Min / Max Connections | 0 / 4 | Pool bounds |
+| Pool Increment | 1 | New connections opened when pool grows |
+| Idle Timeout (s) | 60 | Idle connection lifetime |
+| Queue Timeout (ms) | 60000 | How long a query waits for a free connection before failing with NJS-040 |
+| Stmt Cache Size | 30 | Prepared statements cached per connection |
+
+## Retry on Transient Errors
+
+The node automatically retries failed `getConnection` / `execute` calls when the error is transient (network blip, ADB warming up, listener restart). Configurable per server config:
+
+- **Max Retries** (default 3, set 0 to disable)
+- **Initial Delay (ms)** (default 1000) — doubled each attempt, capped at 10s
+
+Errors that are *not* retried (syntax, permissions, ORA-01017, etc.) surface immediately.
+
+## Batch Mode (executeMany)
+
+For high-volume inserts/updates, enable **Batch mode** on the oracledb (query) node and send an array payload:
+
+```js
+msg.payload = [
+  { id: 1, name: "alice" },
+  { id: 2, name: "bob" },
+  // ... thousands of rows
+];
+// query: INSERT INTO t (id, name) VALUES (:id, :name)
+```
+
+The node returns one message with `msg.payload = { rowsAffected, outBinds, batchErrors }`. You can also enable batch mode dynamically via `msg.executeMany = true`.
+
+## msg.oracle stats sidecar
+
+Every successful result message carries a metadata sidecar that doesn't disturb `msg.payload`:
+
+```js
+msg.oracle = {
+  durationMs: 23,
+  mode: "single",            // or "multi" | "single-meta" | "batch" | "none"
+  statementKind: "query",    // "query" | "ddl" | "plsql" | "insert" | "update" | "delete" | ...
+  rows: 1,                   // when applicable
+  rowsAffected: 5            // when applicable (DML, executeMany)
+}
+```
+
+For streamed `multi` results, each chunk message also gets `chunkIndex` and `totalRowsSoFar` so downstream nodes can detect "last chunk". DDL statements (`CREATE`/`DROP`/`ALTER`/...) produce a `<verb> ok · Xms` status badge instead of the ambiguous `0 affected`.
+
+---
 
 ## Prerequisites
 
   
 
-Before using this node, you **must** have the **Oracle Instant Client** libraries installed on the same machine that is running Node-RED.
+> **Thin mode users (most people):** no prerequisites — `npm install` is enough. Skip to the Configuration section.
+
+  
+
+The rest of this section applies only if you need **Thick mode** (Oracle 11g, AQ, CQN, sharding). You **must** have the **Oracle Instant Client** libraries installed on the same machine that is running Node-RED.
 
   
 

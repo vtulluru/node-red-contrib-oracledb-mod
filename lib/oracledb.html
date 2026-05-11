@@ -11,20 +11,41 @@
                 <input class="input-append-left" type="text" required="required" id="node-config-input-connectionname" placeholder="Name">
             </div>
             <div class="form-row">
+                <label for="node-config-input-usethickmode" style="width: 150px;"><i class="fa fa-cog"></i> Driver Mode</label>
+                <select class="input-append-left" id="node-config-input-usethickmode">
+                    <option value="false">Thin (recommended)</option>
+                    <option value="true">Thick (legacy / Oracle 11g / AQ / CQN)</option>
+                </select>
+            </div>
+            <div class="form-row" id="legacy-thick-warning" style="display:none; background:#fff8c4; border:1px solid #e8c000; padding:6px 8px; border-radius:3px;">
+                <i class="fa fa-exclamation-triangle"></i>
+                This config is running in <b>thick mode for backwards compatibility</b>.
+                Thin mode is recommended for v0.8+. Switch <b>Driver Mode</b> to Thin and clear
+                the Instant Client Path to migrate. See README for details.
+            </div>
+            <div class="form-row">
                 <label for="node-config-input-connectiontype" style="width: 150px;"><i class="fa fa-question"></i> Connection Type</label>
                 <select class="input-append-left" id="node-config-input-connectiontype">
                     <option value="Classic">Classic</option>
                     <option value="TNS Name">TNS Name</option>
                 </select>
             </div>
-            <div class="form-row">
+            <div class="form-row thick-only">
                 <label for="node-config-input-instantclientpath" style="width: 150px;"><i class="fa fa-folder"></i> Instant Client Path</label>
                 <input class="input-append-left" type="text" id="node-config-input-instantclientpath" placeholder="/path/to/instantclient">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-configdir" style="width: 150px;"><i class="fa fa-folder-o"></i> TNS_ADMIN</label>
+                <input class="input-append-left" type="text" id="node-config-input-configdir" placeholder="directory containing tnsnames.ora" style="width: 50%;">
+                <a href="#" id="oracle-configdir-edit" style="display:none; margin-left:8px;">Edit</a>
+                <span id="oracle-configdir-from-env" style="display:none; margin-left:8px; color:#888; font-size:0.85em;">(from $TNS_ADMIN)</span>
             </div>
             <div id="wallet-container" class="connection-type">
                 <div class="form-row">
                     <label for="node-config-input-tnsname" style="width: 150px;"><i class="fa fa-pencil"></i> TNS Name</label>
-                    <input class="input-append-left" type="text" id="node-config-input-tnsname" placeholder="tns_name">
+                    <input class="input-append-left" type="text" id="node-config-input-tnsname" list="oracle-tns-aliases" placeholder="tns_name" style="width: 60%;" autocomplete="off">
+                    <datalist id="oracle-tns-aliases"></datalist>
+                    <span id="oracle-tns-status" style="margin-left: 8px; color: #888; font-size: 0.9em;"></span>
                 </div>
             </div>
             <div id="classic-container" class="connection-type">
@@ -36,11 +57,19 @@
                 </div>
                 <div class="form-row">
                     <label for="node-config-input-db" style="width: 150px;"><i class="fa fa-home"></i> Database</label>
-                    <input type="text" id="node-config-input-db" placeholder="Database name">
+                    <input type="text" id="node-config-input-db" placeholder="Service / SID">
                 </div>
             </div>
             <hr/>
-            <h4>Connection Pool (Recommended)</h4>
+            <div class="form-row">
+                <button type="button" class="red-ui-button" id="oracle-test-btn"><i class="fa fa-plug"></i> Test Connection</button>
+                <button type="button" class="red-ui-button" id="oracle-stats-btn" style="margin-left: 6px;"><i class="fa fa-tachometer"></i> Pool Stats</button>
+                <span id="oracle-test-status" style="margin-left: 10px;"></span>
+            </div>
+            <div id="oracle-stats-panel" style="display:none; margin: 4px 0 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 3px; background: #eef7ff; font-family: monospace; font-size: 0.85em; white-space: pre-wrap;"></div>
+            <div id="oracle-test-result" style="display:none; margin: 4px 0 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 3px; background: #f8f8f8; font-family: monospace; font-size: 0.85em; white-space: pre-wrap;"></div>
+            <hr/>
+            <h4>Connection Pool</h4>
             <div class="form-row">
                 <label for="node-config-input-poolmin" style="width: 150px;"><i class="fa fa-minus-square-o"></i> Min Connections</label>
                 <input type="number" id="node-config-input-poolmin" placeholder="0" style="width: 60px;">
@@ -50,55 +79,92 @@
                 <input type="number" id="node-config-input-poolmax" placeholder="4" style="width: 60px;">
             </div>
             <div class="form-row">
+                <label for="node-config-input-poolincrement" style="width: 150px;"><i class="fa fa-plus"></i> Pool Increment</label>
+                <input type="number" id="node-config-input-poolincrement" placeholder="1" style="width: 60px;">
+            </div>
+            <div class="form-row">
                 <label for="node-config-input-pooltimeout" style="width: 150px;"><i class="fa fa-clock-o"></i> Idle Timeout (s)</label>
                 <input type="number" id="node-config-input-pooltimeout" placeholder="60" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-queuetimeout" style="width: 150px;"><i class="fa fa-hourglass-half"></i> Queue Timeout (ms)</label>
+                <input type="number" id="node-config-input-queuetimeout" placeholder="60000" style="width: 80px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-stmtcachesize" style="width: 150px;"><i class="fa fa-database"></i> Stmt Cache Size</label>
+                <input type="number" id="node-config-input-stmtcachesize" placeholder="30" style="width: 60px;">
+            </div>
+            <hr/>
+            <h4>Retry on Transient Errors</h4>
+            <div class="form-row">
+                <label for="node-config-input-maxretries" style="width: 150px;"><i class="fa fa-refresh"></i> Max Retries</label>
+                <input type="number" id="node-config-input-maxretries" placeholder="3" style="width: 60px;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-retrydelay" style="width: 150px;"><i class="fa fa-clock-o"></i> Initial Delay (ms)</label>
+                <input type="number" id="node-config-input-retrydelay" placeholder="1000" style="width: 80px;">
             </div>
         </div>
         <div id="oracle-server-tab-security" style="display:none">
             <div class="form-row">
-                <label for="node-config-input-user"><i class="fa fa-user"></i> User</label>
-                <input type="text" id="node-config-input-user" >
+                <label for="node-config-input-user" style="width: 150px;"><i class="fa fa-user"></i> User</label>
+                <input type="text" id="node-config-input-user" style="width: 60%;">
             </div>
             <div class="form-row">
-                <label for="node-config-input-password"><i class="fa fa-lock"></i> Password</label>
-                <input type="password" id="node-config-input-password" >
+                <label for="node-config-input-password" style="width: 150px;"><i class="fa fa-lock"></i> Password</label>
+                <input type="password" id="node-config-input-password" style="width: 60%;">
             </div>
+            <hr/>
+            <h4>Wallet (mTLS)</h4>
+            <div class="form-row">
+                <label for="node-config-input-walletlocation" style="width: 150px;"><i class="fa fa-folder-o"></i> Wallet Location</label>
+                <input class="input-append-left" type="text" id="node-config-input-walletlocation" placeholder="(defaults to TNS_ADMIN if blank)" style="width: 60%;">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-walletpassword" style="width: 150px;"><i class="fa fa-lock"></i> Wallet Password</label>
+                <input class="input-append-left" type="password" id="node-config-input-walletpassword" placeholder="(if wallet has SSO file, leave blank)" style="width: 60%;">
+            </div>
+            <hr/>
+            <div class="form-row">
+                <button type="button" class="red-ui-button" id="oracle-test-btn-sec"><i class="fa fa-plug"></i> Test Connection</button>
+                <span id="oracle-test-status-sec" style="margin-left: 10px;"></span>
+            </div>
+            <div id="oracle-test-result-sec" style="display:none; margin: 4px 0 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 3px; background: #f8f8f8; font-family: monospace; font-size: 0.85em; white-space: pre-wrap;"></div>
         </div>
     </div>
 </script>
 <script type="text/x-red" data-help-name="oracle-server">
-    <p>Configures the connection to your Oracle Database. Using a connection pool is highly recommended for stability.</p>
-    
-    <h3>Connection Properties</h3>
+    <p>Configures the connection to your Oracle Database. Using a connection pool is recommended for stability.</p>
+
+    <h3>Driver Mode</h3>
     <dl class="message-properties">
-        <dt>Connection Name</dt>
-        <dd>A unique name for this connection configuration.</dd>
-        
-        <dt>Connection Type</dt>
-        <dd>
-            <ul>
-                <li><b>Classic:</b> A connection using host, port, and database name/service.</li>
-                <li><b>TNS Name:</b> A connection using a TNS Name from a `tnsnames.ora` file.</li>
-            </ul>
-        </dd>
-        
-        <dt>Instant Client Path</dt>
-        <dd>The path on your server to the directory in which you installed the Oracle Instant Client. Ex: <code>/path/to/instantclient</code>. This is required for the node to find the necessary Oracle libraries.</dd>
+        <dt>Thin (recommended)</dt>
+        <dd>Pure-JS driver, no Oracle Instant Client install required. Works with Oracle 12.1+ servers, Autonomous Database (wallets), IAM tokens, LOBs, REF CURSOR.</dd>
+        <dt>Thick</dt>
+        <dd>Required only for: Oracle 11g servers, Advanced Queuing (AQ), Continuous Query Notification (CQN), sharding. Needs Oracle Instant Client installed and an Instant Client Path set.</dd>
     </dl>
-    
+
+    <h3>Wallet / Autonomous Database</h3>
+    <p>Point <b>Wallet / TNS_ADMIN</b> at the directory containing your unzipped wallet (with <code>tnsnames.ora</code>, <code>cwallet.sso</code>, etc.). In thin mode you can also override the wallet folder separately via <b>Wallet Location</b>. If your wallet has <code>cwallet.sso</code>, leave <b>Wallet Password</b> blank.</p>
+
     <h3>Connection Pool</h3>
-    <p>These settings control the pool of database connections managed by the driver. This is the recommended way to handle connections as it automatically recovers from network disconnects and timeouts caused by firewalls.</p>
     <dl class="message-properties">
-        <dt>Min Connections</dt>
-        <dd>The number of connections to create when the pool is started. Defaults to <code>0</code>.</dd>
-        
-        <dt>Max Connections</dt>
-        <dd>The maximum number of connections the pool can have. Defaults to <code>4</code>.</dd>
-        
+        <dt>Min / Max Connections</dt>
+        <dd>Pool size bounds. Default 0 / 4.</dd>
+        <dt>Pool Increment</dt>
+        <dd>Connections added each time the pool grows. Default 1.</dd>
         <dt>Idle Timeout (s)</dt>
-        <dd>How long (in seconds) a connection can be idle in the pool before it is terminated to save resources. Defaults to <code>60</code>.</dd>
+        <dd>Seconds a connection can sit idle before being closed. Default 60.</dd>
+        <dt>Queue Timeout (ms)</dt>
+        <dd>How long a query waits for a free connection before failing with NJS-040. Default 60000.</dd>
+        <dt>Stmt Cache Size</dt>
+        <dd>Number of prepared statements cached per connection. Default 30.</dd>
     </dl>
+
+    <h3>Retry on Transient Errors</h3>
+    <p>The node automatically retries on transient failures (NJS-003, NJS-040, ORA-03113, ORA-12541, ORA-12170, etc.) with exponential backoff. Set <b>Max Retries</b> to 0 to disable.</p>
 </script>
+
 <!-- OracleDB ----------------------------------------------------------------->
 
 <script type="text/x-red" data-template-name="oracledb">
@@ -155,6 +221,11 @@
                 <label for="node-input-resultlimit"><i class="fa fa-bars"></i> Msg rows</label>
                 <input type="text" id="node-input-resultlimit" style="width: 80px;"> (maximum # of result rows per message)
             </div>
+            <hr/>
+            <div class="form-row" style="margin-bottom: 0px">
+                <input type="checkbox" id="node-input-usemany" style="display: inline-block; width: auto; vertical-align: top;">
+                <label for="node-input-usemany" style="width: 80%;"> Batch mode (executeMany) &mdash; <i>msg.payload</i> is an array of bind objects/arrays</label>
+            </div>
         </div>
     </div>
 </script>
@@ -200,6 +271,13 @@
       </dd>
   </dl>
   
+  <h3>Batch mode (executeMany)</h3>
+  <p>Enable <b>Batch mode</b> (or set <code>msg.executeMany = true</code>) to insert/update many rows in a single round-trip. <code>msg.payload</code> must be an array of bind objects (named binds) or array of arrays (positional). The node sends a single output message with <code>{ rowsAffected, outBinds, batchErrors }</code>.</p>
+  <pre>// 1000-row insert in one call
+msg.payload = [ {id:1, name:"a"}, {id:2, name:"b"}, /* ... */ ];
+msg.executeMany = true;
+// query: INSERT INTO t (id, name) VALUES (:id, :name)</pre>
+
   <h3>Executing Scripts</h3>
   <p>
       The node executes a single SQL statement or a single PL/SQL block at a time. To run multiple DML statements (<code>INSERT</code>, <code>UPDATE</code>, etc.) as a single transaction, wrap them in a <code>BEGIN...END;</code> block. To run multiple sequential queries, chain multiple <b>oracledb</b> nodes together in your flow.
@@ -215,17 +293,26 @@ RED.nodes.registerType("oracle-server", {
         connectionname: { value: "", required: true },
         tnsname: { value: "" },
         connectiontype: { value: "Classic" },
+        usethickmode: { value: false },
         instantclientpath: { value: "" },
+        configdir: { value: "" },
+        walletlocation: { value: "" },
         host: { value: "localhost", required: false },
         port: { value: 1521, required: false, validate: RED.validators.number() },
         db: { value: "", required: false },
-        poolmin: { value: 0, required: false, validate: RED.validators.number() },
-        poolmax: { value: 4, required: false, validate: RED.validators.number() },
-        pooltimeout: { value: 60, required: false, validate: RED.validators.number() },
+        poolmin: { value: 0, required: false, validate: RED.validators.number(true) },
+        poolmax: { value: 4, required: false, validate: RED.validators.number(true) },
+        poolincrement: { value: 1, required: false, validate: RED.validators.number(true) },
+        pooltimeout: { value: 60, required: false, validate: RED.validators.number(true) },
+        queuetimeout: { value: 60000, required: false, validate: RED.validators.number(true) },
+        stmtcachesize: { value: 30, required: false, validate: RED.validators.number(true) },
+        maxretries: { value: 3, required: false, validate: RED.validators.number(true) },
+        retrydelay: { value: 1000, required: false, validate: RED.validators.number(true) },
     },
     credentials: {
         user: { type: "text" },
-        password: { type: "password" }
+        password: { type: "password" },
+        walletpassword: { type: "password" }
     },
     label: function () {
         return this.connectionname;
@@ -238,6 +325,213 @@ RED.nodes.registerType("oracle-server", {
                 $("#" + tab.id).show();
             }
         });
+        tabs.addTab({ id: "oracle-server-tab-connection", label: "Connection" });
+        tabs.addTab({ id: "oracle-server-tab-security", label: "Security" });
+        setTimeout(function () { tabs.resize(); }, 0);
+        // --- Legacy migration detection ---
+        // Pre-0.8 configs have instantclientpath set but no usethickmode field.
+        // We coerce them into thick mode and show the migration warning.
+        var self = this;
+        var isLegacy = !!self.instantclientpath && (self.usethickmode === undefined || self.usethickmode === null);
+        if (isLegacy) {
+            $("#node-config-input-usethickmode").val("true");
+            $("#legacy-thick-warning").show();
+        }
+        else {
+            $("#node-config-input-usethickmode").val(self.usethickmode === true || self.usethickmode === "true" ? "true" : "false");
+        }
+        // --- Driver mode toggle ---
+        function refreshModeFields() {
+            var thick = String($("#node-config-input-usethickmode").val()) === "true";
+            $(".thick-only").toggle(thick);
+            $(".thin-only").toggle(!thick);
+            // Hide the legacy warning if user has switched to thin
+            if (!thick)
+                $("#legacy-thick-warning").hide();
+        }
+        $("#node-config-input-usethickmode").on("change", refreshModeFields);
+        refreshModeFields();
+        // --- TNS alias auto-discovery from wallet/TNS_ADMIN ---
+        function loadTnsAliases() {
+            var dir = String($("#node-config-input-configdir").val() || "").trim();
+            var wallet = String($("#node-config-input-walletlocation").val() || "").trim();
+            var $status = $("#oracle-tns-status");
+            var $list = $("#oracle-tns-aliases");
+            var params = [];
+            if (dir)
+                params.push("dir=" + encodeURIComponent(dir));
+            if (wallet)
+                params.push("walletLocation=" + encodeURIComponent(wallet));
+            $status.text("loading...");
+            $.getJSON("oracle-server/tnsnames?" + params.join("&"), function (data) {
+                $list.empty();
+                if (data && Array.isArray(data.aliases) && data.aliases.length) {
+                    data.aliases.forEach(function (a) { return $list.append($("<option>").attr("value", a)); });
+                    $status.text(data.aliases.length + " aliases from " + data.source);
+                }
+                else if (data && data.error === "no_path") {
+                    $status.text("(set Wallet / TNS_ADMIN, or TNS_ADMIN env, to auto-load)");
+                }
+                else if (data && data.error === "not_found") {
+                    var tried = (data.tried || []).join(", ");
+                    $status.text("no tnsnames.ora found (tried: " + tried + ")");
+                }
+                else {
+                    $status.text("(no aliases found)");
+                }
+            }).fail(function () { $status.text("(load failed)"); });
+        }
+        $("#node-config-input-configdir, #node-config-input-walletlocation").on("change blur", loadTnsAliases);
+        // If TNS_ADMIN is set in the Node-RED process env AND the user hasn't
+        // configured their own configdir, auto-fill and lock the field — clearer
+        // signal than a placeholder. "Edit" link lets them override.
+        $.getJSON("oracle-server/env", function (env) {
+            if (env && env.TNS_ADMIN) {
+                var $cd = $("#node-config-input-configdir");
+                if (!String($cd.val() || "").trim()) {
+                    $cd.val(env.TNS_ADMIN).prop("readonly", true).css("background-color", "#f4f4f4");
+                    $("#oracle-configdir-edit").show();
+                    $("#oracle-configdir-from-env").show();
+                    loadTnsAliases();
+                }
+                $("#oracle-configdir-edit").on("click", function (e) {
+                    e.preventDefault();
+                    $("#node-config-input-configdir").prop("readonly", false).css("background-color", "");
+                    $("#oracle-configdir-edit").hide();
+                    $("#oracle-configdir-from-env").hide();
+                });
+            }
+        });
+        loadTnsAliases();
+        // --- Test Connection (shared by both buttons) ---
+        function runTest($status, $result) {
+            $status.html('<i class="fa fa-spinner fa-spin"></i> Testing...').css("color", "#888");
+            $result.hide().empty();
+            var body = {
+                nodeId: self.id || null,
+                usethickmode: String($("#node-config-input-usethickmode").val()) === "true",
+                instantclientpath: $("#node-config-input-instantclientpath").val(),
+                configdir: $("#node-config-input-configdir").val(),
+                walletlocation: $("#node-config-input-walletlocation").val(),
+                walletpassword: $("#node-config-input-walletpassword").val(),
+                tnsname: $("#node-config-input-tnsname").val(),
+                host: $("#node-config-input-host").val(),
+                port: $("#node-config-input-port").val(),
+                db: $("#node-config-input-db").val(),
+                user: $("#node-config-input-user").val(),
+                password: $("#node-config-input-password").val()
+            };
+            $.ajax({
+                url: "oracle-server/test",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(body)
+            }).done(function (data) {
+                if (data.ok) {
+                    var t = data.timing || {};
+                    var timingTxt = t.connectMs != null ? " \u00B7 ".concat(t.connectMs, "ms connect, ").concat(t.totalMs, "ms total") : "";
+                    $status.html('<i class="fa fa-check-circle"></i> Connected (' + data.mode + ' mode)' + timingTxt).css("color", "#3a8f3a");
+                    var info = data.info || {};
+                    var aliasesInWallet_1 = [];
+                    $("#oracle-tns-aliases option").each(function () { aliasesInWallet_1.push($(this).attr("value")); });
+                    var lines_1 = [
+                        "Connect string : " + data.connectString,
+                        "Database name  : " + (info.DB_NAME || "(n/a)"),
+                        "Service name   : " + (info.SERVICE || "(n/a)"),
+                        "Server host    : " + (info.SERVER_HOST || "(n/a)"),
+                        "User           : " + (info.CURR_USER || "(n/a)"),
+                        "Current schema : " + (info.CURR_SCHEMA || "(n/a)"),
+                        "Connect time   : " + (t.connectMs != null ? t.connectMs + " ms" : "(n/a)"),
+                        "Total time     : " + (t.totalMs != null ? t.totalMs + " ms" : "(n/a)")
+                    ];
+                    if (aliasesInWallet_1.length) {
+                        lines_1.push("");
+                        lines_1.push("Other services in wallet:");
+                        aliasesInWallet_1.forEach(function (a) {
+                            if (a !== body.tnsname)
+                                lines_1.push("  - " + a);
+                        });
+                    }
+                    if (Array.isArray(data.schemas) && data.schemas.length) {
+                        lines_1.push("");
+                        lines_1.push("Accessible schemas (" + data.schemaTotal + "):");
+                        var shown = data.schemas.slice(0, 30);
+                        shown.forEach(function (s) { return lines_1.push("  - " + s); });
+                        if (data.schemaTotal > shown.length) {
+                            lines_1.push("  ... +" + (data.schemaTotal - shown.length) + " more");
+                        }
+                    }
+                    $result.text(lines_1.join("\n")).show();
+                }
+                else {
+                    var tFail = data.timing && data.timing.totalMs != null ? " (after ".concat(data.timing.totalMs, "ms)") : "";
+                    $status.html('<i class="fa fa-times-circle"></i> Failed' + tFail).css("color", "#c33");
+                    $result.text("Error: " + data.error + "\nConnect string: " + data.connectString).show();
+                }
+            }).fail(function (xhr) {
+                $status.html('<i class="fa fa-times-circle"></i> HTTP ' + xhr.status).css("color", "#c33");
+            });
+        }
+        // --- Pool stats panel ---
+        // The button toggles a panel that auto-refreshes every 2s while open.
+        // Requires the config to be deployed (we need a node id to fetch stats).
+        var statsTimer = null;
+        self._stopStatsTimer = function () { if (statsTimer) {
+            clearInterval(statsTimer);
+            statsTimer = null;
+        } };
+        function fetchStats() {
+            var id = self.id;
+            var $panel = $("#oracle-stats-panel");
+            if (!id) {
+                $panel.text("Save and Deploy this config first to inspect live pool stats.").show();
+                return;
+            }
+            $.getJSON("oracle-server/" + encodeURIComponent(id) + "/stats", function (data) {
+                if (!data.ok) {
+                    $panel.text("Pool not available: " + (data.error || "unknown")).show();
+                    return;
+                }
+                var s = data.summary;
+                var lines = [
+                    "Driver mode      : " + data.mode,
+                    "Open / In use    : " + s.connectionsOpen + " / " + s.connectionsInUse,
+                    "Pool bounds      : min=" + s.poolMin + ", max=" + s.poolMax,
+                    "Queue length     : " + (s.queueLength != null ? s.queueLength : "(n/a)"),
+                    "Queue max        : " + (s.queueMax != null ? s.queueMax : "(unlimited)"),
+                    "",
+                    "Peak in-use      : " + s.peakConnectionsInUse + " / " + s.poolMax,
+                    "Peak queued      : " + s.peakQueueLength,
+                    "Tracking since   : " + (s.peakSince || "(pool not started)"),
+                    "Gathered         : " + s.gatheredAt
+                ];
+                // Sizing hints
+                if (s.peakConnectionsInUse >= s.poolMax) {
+                    lines.push("");
+                    lines.push("⚠ Peak hit poolMax — consider raising Max Connections.");
+                }
+                if (s.peakQueueLength > 0) {
+                    lines.push("⚠ Queue depth went above 0 — pool was saturated at least once.");
+                }
+                $panel.text(lines.join("\n")).show();
+            }).fail(function () {
+                $panel.text("Failed to fetch pool stats").show();
+            });
+        }
+        $("#oracle-stats-btn").on("click", function () {
+            if (statsTimer) {
+                clearInterval(statsTimer);
+                statsTimer = null;
+                $("#oracle-stats-panel").hide();
+            }
+            else {
+                fetchStats();
+                statsTimer = setInterval(fetchStats, 2000);
+            }
+        });
+        $("#oracle-test-btn").on("click", function () { runTest($("#oracle-test-status"), $("#oracle-test-result")); });
+        $("#oracle-test-btn-sec").on("click", function () { runTest($("#oracle-test-status-sec"), $("#oracle-test-result-sec")); });
+        // --- Classic vs TNS toggle (unchanged behavior) ---
         $(".connection-type").hide();
         $("#node-config-input-connectiontype").on("change", function (evt) {
             var ct = evt.currentTarget;
@@ -254,15 +548,17 @@ RED.nodes.registerType("oracle-server", {
                 $("#node-config-input-tnsname").val("");
             }
         }).trigger("change");
-        tabs.addTab({
-            id: "oracle-server-tab-connection",
-            label: "Connection"
-        });
-        tabs.addTab({
-            id: "oracle-server-tab-security",
-            label: "Security"
-        });
-        setTimeout(function () { tabs.resize(); }, 0);
+    },
+    oneditsave: function () {
+        // Coerce select-string back to boolean so the runtime sees a real bool.
+        var v = String($("#node-config-input-usethickmode").val());
+        this.usethickmode = (v === "true");
+        if (this._stopStatsTimer)
+            this._stopStatsTimer();
+    },
+    oneditcancel: function () {
+        if (this._stopStatsTimer)
+            this._stopStatsTimer();
     }
 });
 
@@ -289,7 +585,8 @@ RED.nodes.registerType("oracledb", {
                 "\n]" },
         server: { type: "oracle-server", required: true },
         resultaction: { value: "multi" },
-        resultlimit: { value: 100 }
+        resultlimit: { value: 100 },
+        usemany: { value: false }
     },
     inputs: 1,
     outputs: 1,
