@@ -210,9 +210,13 @@
                 <div id="schema-browser-list" style="font-family: monospace; font-size: 12px;"></div>
             </div>
 
-            <div class="form-row node-input-query-text-editor-row">
+            <div class="form-row node-input-query-text-editor-row" style="margin-bottom: 4px;">
                 <textarea id="node-input-query" style="display: none;"></textarea>
                 <div style="height: 250px;" class="node-text-editor" id="node-input-query-editor" ></div>
+            </div>
+            <div id="query-binds-indicator" style="font-size: 11px; color: #4a5568; padding: 4px 8px; background: #edf2f7; border-radius: 3px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa fa-tags" style="color: #718096;"></i> <b>Detected Binds:</b> <span id="query-detected-binds-list" style="color: #2b6cb0; font-family: monospace;">(none)</span></span>
+                <span style="color: #718096; font-size: 10px;">Bind via <i>msg.payload</i> or <i>msg.bindVars</i></span>
             </div>
         </div>
         <div id="oracle-out-tab-mappings" style="display:none">
@@ -253,6 +257,11 @@
                 <input type="text" id="node-input-resultlimit" style="width: 80px;"> (maximum # of result rows per message)
             </div>
             <hr/>
+            <div class="form-row" style="margin-bottom: 6px;">
+                <input type="checkbox" id="node-input-splitoutputs" style="display: inline-block; width: auto; vertical-align: top;">
+                <label for="node-input-splitoutputs" style="width: 80%;"> Separate error output port (Port 1 = Success, Port 2 = Error)</label>
+                <input type="hidden" id="node-input-outputs">
+            </div>
             <div class="form-row" style="margin-bottom: 0px">
                 <input type="checkbox" id="node-input-usemany" style="display: inline-block; width: auto; vertical-align: top;">
                 <label for="node-input-usemany" style="width: 80%;"> Batch mode (executeMany) &mdash; <i>msg.payload</i> is an array of bind objects/arrays</label>
@@ -271,8 +280,8 @@
         If an array, the values are used as positional bind parameters for the query (e.g., <code>:1, :2</code>).
         If an object, it can be used with <b>Field Mappings</b> to generate the parameter array.
     </dd>
-    <dt class="optional">query <span class="property-type">string</span></dt>
-    <dd>An SQL query or PL/SQL block to execute. If not provided, the query configured in the node's editor will be used.</dd>
+    <dt class="optional">query <span class="property-type">string | string[]</span></dt>
+    <dd>An SQL query or an array of SQL queries to execute sequentially in a single batch. If not provided, the query configured in the node's editor will be used.</dd>
     <dt class="optional">bindVars <span class="property-type">object</span></dt>
     <dd>
         For advanced use cases like stored procedures with <code>OUT</code> parameters. This object provides explicit bind definitions.
@@ -301,6 +310,13 @@
           <b>Note:</b> If the total number of rows is less than the "Msg rows" limit, this option will behave identically to "send single query result message".
       </dd>
   </dl>
+
+  <h3>Dual Output Ports</h3>
+  <p>When <b>Separate error output port</b> is enabled, the node exposes two output ports:</p>
+  <ul>
+      <li><b>Port 1 (top):</b> Successful query results.</li>
+      <li><b>Port 2 (bottom):</b> Errors (with <code>msg.error</code>), allowing immediate routing to alerting or retry flows without requiring a separate Catch node.</li>
+  </ul>
   
   <h3>Batch mode (executeMany)</h3>
   <p>Enable <b>Batch mode</b> (or set <code>msg.executeMany = true</code>) to insert/update many rows in a single round-trip. <code>msg.payload</code> must be an array of bind objects (named binds) or array of arrays (positional). The node sends a single output message with <code>{ rowsAffected, outBinds, batchErrors }</code>.</p>
@@ -629,10 +645,18 @@ RED.nodes.registerType("oracledb", {
         resultaction: { value: "multi" },
         resultlimit: { value: 100 },
         usemany: { value: false },
-        txaction: { value: "auto" }
+        txaction: { value: "auto" },
+        splitoutputs: { value: false },
+        outputs: { value: 1 }
     },
     inputs: 1,
     outputs: 1,
+    outputLabels: function (index) {
+        if (this.splitoutputs || this.outputs === 2) {
+            return index === 0 ? "success" : "error";
+        }
+        return "result";
+    },
     color: "#ff6666",
     icon: "db.png",
     align: "right",
@@ -648,6 +672,11 @@ RED.nodes.registerType("oracledb", {
             this.txaction = "auto";
             $("#node-input-txaction").val("auto");
         }
+        $("#node-input-splitoutputs").prop("checked", !!(this.splitoutputs || this.outputs === 2));
+        $("#node-input-splitoutputs").on("change", function () {
+            const isSplit = $(this).is(":checked");
+            $("#node-input-outputs").val(isSplit ? 2 : 1);
+        });
         // use query editor
         const queryField = $("#node-input-query");
         const queryEditor = RED.editor.createEditor({
@@ -658,6 +687,27 @@ RED.nodes.registerType("oracledb", {
         queryEditor.getSession().on("change", function () {
             queryField.val(queryEditor.getSession().getValue());
         });
+        function updateDetectedBinds() {
+            const text = queryEditor.getSession().getValue() || "";
+            const cleanText = text.replace(/'(?:''|[^'])*'/g, "");
+            const regex = /:(\w+)/g;
+            const binds = new Set();
+            let m;
+            while ((m = regex.exec(cleanText)) !== null) {
+                binds.add(":" + m[1]);
+            }
+            const bindSpan = $("#query-detected-binds-list");
+            if (binds.size === 0) {
+                bindSpan.text("(none)");
+                bindSpan.css("color", "#718096");
+            }
+            else {
+                bindSpan.text(Array.from(binds).join(", "));
+                bindSpan.css("color", "#2b6cb0");
+            }
+        }
+        queryEditor.getSession().on("change", updateDetectedBinds);
+        updateDetectedBinds();
         // use mappings editor
         const mappingsField = $("#node-input-mappings");
         const mappingsEditor = RED.editor.createEditor({
@@ -925,6 +975,10 @@ RED.nodes.registerType("oracledb", {
         d.one("dialogclose", () => {
             d.off("dialogresize", functionDialogResize);
         });
+    },
+    oneditsave: function () {
+        this.splitoutputs = $("#node-input-splitoutputs").is(":checked");
+        this.outputs = this.splitoutputs ? 2 : 1;
     }
 });
 //# sourceMappingURL=oracledb.js.map

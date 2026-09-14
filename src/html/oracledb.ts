@@ -26,10 +26,18 @@ RED.nodes.registerType("oracledb", {
         resultaction: {value: "multi"},
         resultlimit: {value: 100},
         usemany: {value: false},
-        txaction: {value: "auto"}
+        txaction: {value: "auto"},
+        splitoutputs: {value: false},
+        outputs: {value: 1}
     },
     inputs: 1,
     outputs: 1,
+    outputLabels: function (index: number) {
+        if (this.splitoutputs || this.outputs === 2) {
+            return index === 0 ? "success" : "error";
+        }
+        return "result";
+    },
     color: "#ff6666",
     icon: "db.png",
     align: "right",
@@ -46,6 +54,12 @@ RED.nodes.registerType("oracledb", {
             $("#node-input-txaction").val("auto");
         }
 
+        $("#node-input-splitoutputs").prop("checked", !!(this.splitoutputs || this.outputs === 2));
+        $("#node-input-splitoutputs").on("change", function () {
+            const isSplit = $(this).is(":checked");
+            $("#node-input-outputs").val(isSplit ? 2 : 1);
+        });
+
         // use query editor
         const queryField = $("#node-input-query");
         const queryEditor = RED.editor.createEditor({
@@ -56,6 +70,27 @@ RED.nodes.registerType("oracledb", {
         queryEditor.getSession().on("change", function() {
           queryField.val(queryEditor.getSession().getValue());
         });
+
+        function updateDetectedBinds() {
+            const text = queryEditor.getSession().getValue() || "";
+            const cleanText = text.replace(/'(?:''|[^'])*'/g, "");
+            const regex = /:(\w+)/g;
+            const binds = new Set<string>();
+            let m;
+            while ((m = regex.exec(cleanText)) !== null) {
+                binds.add(":" + m[1]);
+            }
+            const bindSpan = $("#query-detected-binds-list");
+            if (binds.size === 0) {
+                bindSpan.text("(none)");
+                bindSpan.css("color", "#718096");
+            } else {
+                bindSpan.text(Array.from(binds).join(", "));
+                bindSpan.css("color", "#2b6cb0");
+            }
+        }
+        queryEditor.getSession().on("change", updateDetectedBinds);
+        updateDetectedBinds();
 
         // use mappings editor
         const mappingsField = $("#node-input-mappings");
@@ -344,5 +379,9 @@ RED.nodes.registerType("oracledb", {
         d.one("dialogclose", () => {
             d.off("dialogresize", functionDialogResize);
         });
+    },
+    oneditsave: function () {
+        this.splitoutputs = $("#node-input-splitoutputs").is(":checked");
+        this.outputs = this.splitoutputs ? 2 : 1;
     }
 });

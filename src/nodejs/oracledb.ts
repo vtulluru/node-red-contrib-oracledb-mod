@@ -114,6 +114,7 @@ module.exports = function (RED) {
             return;
         }
 
+        node.splitoutputs = !!(n.splitoutputs || n.outputs === 2);
         node.status({ fill: "blue", shape: "dot", text: "running..." });
 
         const useQuery = n.usequery;
@@ -156,10 +157,15 @@ module.exports = function (RED) {
         } else if (msg.payload && typeof msg.payload === "object" && !Array.isArray(msg.payload) && !useMappings) {
             const queryBinds = new Set<string>();
             const regex = /:(\w+)/g;
-            let match;
-            while ((match = regex.exec(query)) !== null) {
-                queryBinds.add(match[1]);
-            }
+            const queryStrings = Array.isArray(query) ? query : [query];
+            queryStrings.forEach(qStr => {
+                if (typeof qStr === "string") {
+                    let match;
+                    while ((match = regex.exec(qStr)) !== null) {
+                        queryBinds.add(match[1]);
+                    }
+                }
+            });
 
             if (queryBinds.size > 0) {
                 const cleanBinds = {};
@@ -377,10 +383,36 @@ module.exports = function (RED) {
     }
 
     node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit, useMany, txAction) {
+      function sendSuccess(msgToSend: any) {
+        if (requestingNode.splitoutputs) {
+          requestingNode.send([msgToSend, null]);
+        } else {
+          requestingNode.send(msgToSend);
+        }
+      }
+
+      function sendError(errMsg: string, msgToSend: any) {
+        let shortError = errMsg ? errMsg.split("\n")[0] : String(errMsg);
+        if (/NJS-040/.test(shortError) && node.pool) {
+          try {
+            const s = typeof node.pool.getStatistics === "function" ? node.pool.getStatistics() : null;
+            const qLen = s ? s.currentQueueLength : "?";
+            shortError = `${shortError} (pool exhausted: ${node.pool.connectionsInUse}/${node.pool.connectionsOpen} in use, ${qLen} queued, waited ${node.queuetimeout}ms)`;
+          } catch { /* ignore */ }
+        }
+        requestingNode.error(`Oracle query error: ${shortError}`, msgToSend);
+        requestingNode.status({ fill: "red", shape: "dot", text: shortError });
+        scheduleStatusReset(requestingNode, 5000);
+        if (requestingNode.splitoutputs && msgToSend) {
+          const errCopy = RED.util.cloneMessage(msgToSend);
+          errCopy.error = shortError;
+          requestingNode.send([null, errCopy]);
+        }
+      }
+
       if (!node.pool) {
         const errText = "Connection pool is not available.";
-        requestingNode.error(errText, msg);
-        requestingNode.status({ fill: "red", shape: "dot", text: errText });
+        sendError(errText, msg);
         return;
       }
 
@@ -430,15 +462,56 @@ module.exports = function (RED) {
           requestingNode.status({ fill: "yellow", shape: "ring", text: `tx: rolled back · ${elapsed}ms` });
           scheduleStatusReset(requestingNode, 3000);
           msg.oracle = { durationMs: elapsed, transaction: "rollback" };
-          requestingNode.send(msg);
+          sendSuccess(msg);
           return;
         }
 
-        const trimmedQuery = (query || "").trim();
+        const trimmedQuery = typeof query === "string" ? query.trim() : "";
         const finalQuery = isPLSQLBlock(trimmedQuery) ? trimmedQuery : trimmedQuery.replace(/;$/, "");
 
         let result: any = null;
-        if (finalQuery.length > 0) {
+        let arrayResults: any[] = null;
+        let totalRowsAffected = 0;
+
+        function formatRowVectors(row: any): any {
+          if (!row || typeof row !== "object" || !msg.vectorAsArray) return row;
+          const copy = { ...row };
+          for (const k in copy) {
+            if (copy[k] instanceof Float32Array || copy[k] instanceof Float64Array) {
+              copy[k] = Array.from(copy[k]);
+            }
+          }
+          return copy;
+        }
+
+        if (Array.isArray(query)) {
+          const queryList = query.filter((q: any) => typeof q === "string" && q.trim().length > 0);
+          arrayResults = [];
+          for (let i = 0; i < queryList.length; i++) {
+            const singleQ = queryList[i].trim().replace(/;$/, "");
+            const options: any = {
+              autoCommit: txMode === "auto" && i === queryList.length - 1,
+              outFormat: oracledb.OBJECT,
+              maxRows: resultSetLimit
+            };
+            const singleRes: any = await withRetry(
+              () => connection.execute(singleQ, bindVars || [], options),
+              `execute[${i}]`,
+              requestingNode
+            );
+            if (resultAction === "single-meta") {
+              arrayResults.push({
+                rowsAffected: singleRes.rowsAffected,
+                metaData: singleRes.metaData,
+                outBinds: singleRes.outBinds,
+                rows: Array.isArray(singleRes.rows) ? singleRes.rows.map(formatRowVectors) : singleRes.rows
+              });
+            } else {
+              arrayResults.push(Array.isArray(singleRes.rows) ? singleRes.rows.map(formatRowVectors) : (singleRes.rowsAffected !== undefined ? { rowsAffected: singleRes.rowsAffected } : singleRes.rows));
+            }
+            if (typeof singleRes.rowsAffected === "number") totalRowsAffected += singleRes.rowsAffected;
+          }
+        } else if (finalQuery.length > 0) {
           const options: any = {
             autoCommit: txMode === "auto",
             outFormat: oracledb.OBJECT,
@@ -490,6 +563,8 @@ module.exports = function (RED) {
           summary = `tx: begin · ${elapsed}ms`;
         } else if (txMode === "continue") {
           summary = `tx: continue · ${elapsed}ms`;
+        } else if (arrayResults) {
+          summary = `${arrayResults.length} queries · ${elapsed}ms`;
         } else if (useMany) {
           summary = `batch: ${(result && result.rowsAffected) || 0} rows · ${elapsed}ms`;
         } else if (result && result.rows) {
@@ -509,27 +584,29 @@ module.exports = function (RED) {
         // Stats sidecar
         const stats: any = {
           durationMs: elapsed,
-          mode: useMany ? "batch" : (resultAction || "none"),
+          mode: arrayResults ? "array" : (useMany ? "batch" : (resultAction || "none")),
           transaction: txMode,
-          statementKind: ddlVerbs.has(headWord) ? "ddl"
+          statementKind: arrayResults ? "batch"
+            : ddlVerbs.has(headWord) ? "ddl"
             : isPLSQLBlock(trimmedQuery) ? "plsql"
             : (headWord === "SELECT" ? "query" : (headWord || "unknown").toLowerCase())
         };
         if (action) stats.action = String(action);
         if (moduleName) stats.module = String(moduleName);
         if (clientInfo) stats.clientInfo = String(clientInfo);
-        if (result && typeof result.rowsAffected === "number") stats.rowsAffected = result.rowsAffected;
+        if (arrayResults) {
+          stats.statementsExecuted = arrayResults.length;
+          if (totalRowsAffected > 0) stats.rowsAffected = totalRowsAffected;
+        } else if (result && typeof result.rowsAffected === "number") {
+          stats.rowsAffected = result.rowsAffected;
+        }
         if (result && result.rows) stats.rows = result.rows.length;
 
-        function formatRowVectors(row: any): any {
-          if (!row || typeof row !== "object" || !msg.vectorAsArray) return row;
-          const copy = { ...row };
-          for (const k in copy) {
-            if (copy[k] instanceof Float32Array || copy[k] instanceof Float64Array) {
-              copy[k] = Array.from(copy[k]);
-            }
-          }
-          return copy;
+        if (arrayResults) {
+          msg.payload = arrayResults;
+          msg.oracle = stats;
+          sendSuccess(msg);
+          return;
         }
 
         if (useMany && result) {
@@ -539,13 +616,13 @@ module.exports = function (RED) {
             batchErrors: result.batchErrors
           };
           msg.oracle = stats;
-          requestingNode.send(msg);
+          sendSuccess(msg);
         } else if (result) {
           switch (resultAction) {
             case "single": {
               msg.payload = Array.isArray(result.rows) ? result.rows.map(formatRowVectors) : result.rows;
               msg.oracle = stats;
-              requestingNode.send(msg);
+              sendSuccess(msg);
               break;
             }
             case "single-meta": {
@@ -555,7 +632,7 @@ module.exports = function (RED) {
                 outBinds: result.outBinds
               };
               msg.oracle = stats;
-              requestingNode.send(msg);
+              sendSuccess(msg);
               break;
             }
             case "multi": {
@@ -571,7 +648,7 @@ module.exports = function (RED) {
                     const newMsg = RED.util.cloneMessage(msg);
                     newMsg.payload = rows.map(formatRowVectors);
                     newMsg.oracle = { ...stats, rows: rows.length, chunkIndex: chunkIdx++, totalRowsSoFar: totalRows };
-                    requestingNode.send(newMsg);
+                    sendSuccess(newMsg);
                   }
                 } while (rows.length > 0);
                 await resultSet.close();
@@ -584,13 +661,13 @@ module.exports = function (RED) {
             default:
               msg.oracle = stats;
               if (txMode === "commit" || txMode === "begin" || txMode === "continue") {
-                requestingNode.send(msg);
+                sendSuccess(msg);
               }
               break;
           }
         } else {
           msg.oracle = stats;
-          requestingNode.send(msg);
+          sendSuccess(msg);
         }
       } catch (err: any) {
         if (waitingTimer) clearTimeout(waitingTimer);
@@ -602,17 +679,7 @@ module.exports = function (RED) {
           delete msg._oracleTx;
           shouldCloseConnection = false;
         }
-        let shortError = err.message ? err.message.split("\n")[0] : String(err);
-        if (/NJS-040/.test(shortError) && node.pool) {
-          try {
-            const s = typeof node.pool.getStatistics === "function" ? node.pool.getStatistics() : null;
-            const qLen = s ? s.currentQueueLength : "?";
-            shortError = `${shortError} (pool exhausted: ${node.pool.connectionsInUse}/${node.pool.connectionsOpen} in use, ${qLen} queued, waited ${node.queuetimeout}ms)`;
-          } catch { /* ignore */ }
-        }
-        requestingNode.error(`Oracle query error: ${shortError}`, msg);
-        requestingNode.status({ fill: "red", shape: "dot", text: shortError });
-        scheduleStatusReset(requestingNode, 5000);
+        sendError(err.message, msg);
       } finally {
         if (connection && shouldCloseConnection) {
           try {

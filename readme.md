@@ -15,12 +15,14 @@ This module provides a stable connection to Oracle, supporting queries, DML, sto
 
 ---
 
-## What's new in 0.10.0
+## What's new in 1.0.0
 
-- **Multi-Node Transaction Management** — support for multi-node atomic transactions with `Begin`, `Continue`, `Commit`, and `Rollback` transaction modes. Transaction state is passed via `msg._oracleTx` with an automatic 60-second safety rollback timer to guard against connection pool leaks.
-- **Native Vector Search (Oracle 23ai / 26ai)** — pass JavaScript `Float32Array` or `Float64Array` in `msg.payload` or `msg.bindVars` to bind vectors natively (`DB_TYPE_VECTOR`) for AI similarity queries (`VECTOR_DISTANCE`).
-- **Dynamic Observability & Session Tracing** — set `msg.action`, `msg.module`, or `msg.clientInfo` to automatically populate Oracle's `V$SESSION` and OCI Performance Hub views (`SYS_CONTEXT('USERENV', ...)`), with all telemetry reflected in the `msg.oracle` stats sidecar.
-- **Interactive Schema & Field Browser** — browse database hierarchy (Database → Schema → Object Type → Table/View → Columns) directly from the query editor with one-click `SELECT *`, `SELECT cols`, and `INSERT template` SQL generators.
+- **Optional Dual Output Ports (Success vs. Error)** — toggle separate error output on the node. Port 1 emits successful query results while Port 2 emits query errors with `msg.error`, allowing direct routing to retry, fallback, or alerting flows without requiring a separate Catch node.
+- **Sequential Multi-Statement Queries** — pass an array of SQL statements in `msg.query` to execute multiple queries sequentially within a single round-trip, returning an array of results in `msg.payload`.
+- **Live SQL Bind Auto-Detection** — real-time bind parameter badge in the query editor displays detected `:param` names as you type.
+- **Multi-Node Transaction Management** — atomic transactions across multiple flow nodes (`Begin`, `Continue`, `Commit`, `Rollback`) with auto-rollback safety timeout.
+- **Oracle 23ai / 26ai Native Vector Search** — automatic binding of JavaScript `Float32Array` / `Float64Array` as native `DB_TYPE_VECTOR` for AI similarity search.
+- **Interactive Schema & Field Explorer** — database hierarchy browser (Database → Schema → Object Type → Table/View → Columns) with smart `SELECT *`, `SELECT cols`, and `INSERT template` SQL generators.
 
   <p align="center">
     <img src="docs/images/schema-browser.png" alt="Schema Explorer" width="550" />
@@ -383,11 +385,14 @@ END;
 - Ensure your Oracle user has necessary privileges
 
 ## What's New
-### Version 0.10.0
+### Version 1.0.0
+-   **Feature:** Optional Dual Output Ports (`splitoutputs`) for direct separation of Success vs Error messages without a Catch node.
+-   **Feature:** Sequential multi-query execution via `msg.query` array with unified results.
+-   **Feature:** Real-time SQL bind parameter auto-detection in the editor.
 -   **Feature:** Multi-node atomic transaction management (`Begin`, `Continue`, `Commit`, `Rollback`) with auto-rollback safety timer.
 -   **Feature:** Native Vector & Embedding binding (`DB_TYPE_VECTOR`) for Oracle AI Database 23ai / 26ai vector similarity search.
 -   **Feature:** Dynamic session tracing (`action`, `module`, `clientInfo`) into Oracle `V$SESSION` / `SYS_CONTEXT` and `msg.oracle` stats.
--   **Feature:** In-dialog Interactive Schema & Table Browser with one-click query generation.
+-   **Feature:** In-dialog Interactive Database, Schema, and Field Explorer with smart SQL template generation.
 
 ### Version 0.9.0
 -   **Upgraded:** `oracledb` bumped to `^7.0.1` with verified Thin mode and OCI ADB support.

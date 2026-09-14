@@ -273,6 +273,27 @@ describe("Editor endpoints (httpAdmin)", function () {
       }
     });
   });
+
+  it("dual output mode routes errors to second output port [null, msg]", function (done) {
+    const testServer = new testNodes["oracle-server"](serverConfig);
+    testServer.pool = null;
+    const queryConfig = {
+      name: "Dual output error test",
+      query: "SELECT 1 FROM DUAL",
+      server: "mock-server-id",
+      splitoutputs: true
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    queryNode.server = testServer;
+    queryNode.send = (out: any) => {
+      expect(Array.isArray(out)).to.equal(true);
+      expect(out[0]).to.be.null;
+      expect(out[1]).to.be.an("object");
+      expect(out[1].error).to.include("pool is not available");
+      done();
+    };
+    queryNode.emit("input", {});
+  });
 });
 
 // ---------- LIVE TESTS ----------
@@ -638,6 +659,52 @@ describe("Live Database Tests (thin mode)", function () {
     // Verify connection was returned to pool
     await new Promise((r) => setTimeout(r, 200));
     expect(serverNode.pool.connectionsInUse).to.equal(initialInUse);
+  });
+
+  it("executes sequential array of queries in one round-trip", function (done) {
+    const queryConfig = {
+      name: "Array query test",
+      server: "mock-server-id",
+      resultaction: "single"
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    queryNode.server = serverNode;
+    queryNode.send = (msg: any) => {
+      expect(msg.payload).to.be.an("array").with.lengthOf(2);
+      expect(msg.payload[0][0].VAL).to.equal(10);
+      expect(msg.payload[1][0].VAL).to.equal(20);
+      expect(msg.oracle.statementsExecuted).to.equal(2);
+      expect(msg.oracle.mode).to.equal("array");
+      done();
+    };
+    queryNode.error = (err: any) => done(new Error(err));
+    queryNode.emit("input", {
+      query: [
+        "SELECT 10 AS VAL FROM DUAL",
+        "SELECT 20 AS VAL FROM DUAL"
+      ]
+    });
+  });
+
+  it("dual output mode routes successful result to first output port [msg, null]", function (done) {
+    const queryConfig = {
+      name: "Dual output success test",
+      query: "SELECT 42 AS ANSWER FROM DUAL",
+      server: "mock-server-id",
+      resultaction: "single",
+      splitoutputs: true
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    queryNode.server = serverNode;
+    queryNode.send = (out: any) => {
+      expect(Array.isArray(out)).to.equal(true);
+      expect(out[0]).to.be.an("object");
+      expect(out[0].payload[0].ANSWER).to.equal(42);
+      expect(out[1]).to.be.null;
+      done();
+    };
+    queryNode.error = (err: any) => done(new Error(err));
+    queryNode.emit("input", {});
   });
 
   after(async function () {
