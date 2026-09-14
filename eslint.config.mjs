@@ -1,6 +1,20 @@
-import js from "@eslint/js";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
+import { createRequire } from "module";
+const req = createRequire(import.meta.url);
+const Module = req("module");
+const originalRequire = Module.prototype.require;
+
+// TypeScript 7.0 uses a native Go binary for compilation (tsc) and defers the JS AST API to 7.1.
+// Redirect typescript-eslint AST queries to @typescript/typescript6:
+Module.prototype.require = function (id) {
+  if (id === "typescript") {
+    return originalRequire.call(this, "@typescript/typescript6");
+  }
+  return originalRequire.apply(this, arguments);
+};
+
+const js = req("@eslint/js");
+const tsPlugin = req("@typescript-eslint/eslint-plugin");
+const tsParser = req("@typescript-eslint/parser");
 
 export default [
   js.configs.recommended,
