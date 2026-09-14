@@ -1,3 +1,4 @@
+[![CI](https://github.com/vtulluru/node-red-contrib-oracledb-mod/actions/workflows/ci.yml/badge.svg)](https://github.com/vtulluru/node-red-contrib-oracledb-mod/actions/workflows/ci.yml)
 [![Node.js Package](https://github.com/vtulluru/node-red-contrib-oracledb-mod/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/vtulluru/node-red-contrib-oracledb-mod/actions/workflows/npm-publish.yml)
 
   
@@ -11,6 +12,17 @@ Robust, modern, and easy-to-use Node-RED nodes for interacting with Oracle Datab
   
 
 This module provides a stable connection to Oracle, supporting queries, DML, stored procedures, and advanced data binding, all handled through a resilient connection pool.
+
+---
+
+## What's new in 0.9.0
+
+- **oracledb 7.0.1** — upgraded the core Oracle driver to version 7, verified with Oracle Database 26ai and OCI Autonomous Database (Thin mode).
+- **TypeScript 7 Native Port** — modern build pipeline compiling directly with TypeScript 7 native CLI, dropping build times from ~7.5s to ~1.3s (~80% speedup).
+- **Modernized Dev Toolchain** — ESLint 10 with flat configuration (`eslint.config.mjs`), Mocha 12, Chai 6, and modern `@types/jquery`.
+- **Zero Package Vulnerabilities** — retired legacy gulp build streaming packages (`gulp-typescript`, `gulp-sourcemaps`, `gulp-spawn-mocha`), eliminating all 13 package security advisories.
+- **Continuous Integration** — automated GitHub Actions CI matrix running build, linting, and unit tests on Node 20 and Node 22 for all pull requests and pushes.
+- **Node Engine** — engines updated to Node ≥ 20.
 
 ---
 
@@ -358,6 +370,20 @@ END;
 - Ensure your Oracle user has necessary privileges
 
 ## What's New
+### Version 0.9.0
+-   **Upgraded:** `oracledb` bumped to `^7.0.1` with verified Thin mode and OCI ADB support.
+-   **Performance:** Migrated build pipeline to TypeScript 7 native execution, improving build times by >80%.
+-   **Security:** Resolved all 13 security vulnerabilities across dependencies (0 audit vulnerabilities).
+-   **Tooling:** Migrated ESLint to v10 flat config (`eslint.config.mjs`) and test suite to Mocha 12 + Chai 6.
+-   **CI/CD:** Added automated CI workflow across Node 20 and 22.
+-   **Engines:** Node runtime requirements updated to Node ≥ 20.
+
+### Version 0.8.0
+-   **Feature:** Thin mode set as default driver mode (no Instant Client needed for Oracle 12.1+ / ADB).
+-   **Feature:** Native OCI Autonomous Database and wallet support (`TNS_ADMIN`).
+-   **Feature:** In-dialog Connection Testing and live Connection Pool Statistics.
+-   **Feature:** Batch mode execution via `executeMany`.
+
 ### Version 0.7.6
 -   **Fixed:** Resolved ORA-06550 errors when executing PL/SQL blocks with `BEGIN...END;` statements. The module now intelligently preserves semicolons for PL/SQL blocks while removing them for regular SQL statements. (Fixes [#126](https://github.com/vtulluru/node-red-contrib-oracledb-mod/issues/126)).
 -   **Enhanced:** Added comprehensive test coverage for PL/SQL block execution scenarios.
