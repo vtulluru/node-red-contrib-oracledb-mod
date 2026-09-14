@@ -15,6 +15,19 @@ This module provides a stable connection to Oracle, supporting queries, DML, sto
 
 ---
 
+## What's new in 0.10.0
+
+- **Multi-Node Transaction Management** — support for multi-node atomic transactions with `Begin`, `Continue`, `Commit`, and `Rollback` transaction modes. Transaction state is passed via `msg._oracleTx` with an automatic 60-second safety rollback timer to guard against connection pool leaks.
+- **Native Vector Search (Oracle 23ai / 26ai)** — pass JavaScript `Float32Array` or `Float64Array` in `msg.payload` or `msg.bindVars` to bind vectors natively (`DB_TYPE_VECTOR`) for AI similarity queries (`VECTOR_DISTANCE`).
+- **Dynamic Observability & Session Tracing** — set `msg.action`, `msg.module`, or `msg.clientInfo` to automatically populate Oracle's `V$SESSION` and OCI Performance Hub views (`SYS_CONTEXT('USERENV', ...)`), with all telemetry reflected in the `msg.oracle` stats sidecar.
+- **Interactive Schema & Field Browser** — browse database hierarchy (Database → Schema → Object Type → Table/View → Columns) directly from the query editor with one-click `SELECT *`, `SELECT cols`, and `INSERT template` SQL generators.
+
+  <p align="center">
+    <img src="docs/images/schema-browser.png" alt="Schema Explorer" width="550" />
+  </p>
+
+---
+
 ## What's new in 0.9.0
 
 - **oracledb 7.0.1** — upgraded the core Oracle driver to version 7, verified with Oracle Database 26ai and OCI Autonomous Database (Thin mode).
@@ -370,6 +383,12 @@ END;
 - Ensure your Oracle user has necessary privileges
 
 ## What's New
+### Version 0.10.0
+-   **Feature:** Multi-node atomic transaction management (`Begin`, `Continue`, `Commit`, `Rollback`) with auto-rollback safety timer.
+-   **Feature:** Native Vector & Embedding binding (`DB_TYPE_VECTOR`) for Oracle AI Database 23ai / 26ai vector similarity search.
+-   **Feature:** Dynamic session tracing (`action`, `module`, `clientInfo`) into Oracle `V$SESSION` / `SYS_CONTEXT` and `msg.oracle` stats.
+-   **Feature:** In-dialog Interactive Schema & Table Browser with one-click query generation.
+
 ### Version 0.9.0
 -   **Upgraded:** `oracledb` bumped to `^7.0.1` with verified Thin mode and OCI ADB support.
 -   **Performance:** Migrated build pipeline to TypeScript 7 native execution, improving build times by >80%.

@@ -40,18 +40,37 @@ module.exports = function (RED) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  function transformBindVars(bindVars) {
-    const transformed = {};
+  function normalizeBindValue(val: any): any {
+    if (val instanceof Float32Array || val instanceof Float64Array) {
+      return { type: oracledb.DB_TYPE_VECTOR, val };
+    }
+    if (val && typeof val === "object" && (val.type === "vector" || val.type === oracledb.DB_TYPE_VECTOR) && Array.isArray(val.val)) {
+      return { type: oracledb.DB_TYPE_VECTOR, val: new Float32Array(val.val) };
+    }
+    return val;
+  }
+
+  function transformBindVars(bindVars: any) {
+    const transformed: any = {};
     for (const key in bindVars) {
       if (Object.prototype.hasOwnProperty.call(bindVars, key)) {
         const bindVar = bindVars[key];
+        let bindType = oracledb[bindVar.type] || bindVar.type;
+        if (bindVar.type === "DB_TYPE_VECTOR" || bindVar.type === "VECTOR" || bindVar.type === oracledb.DB_TYPE_VECTOR) {
+          bindType = oracledb.DB_TYPE_VECTOR;
+        }
         transformed[key] = {
-          dir: oracledb[bindVar.dir],
-          type: oracledb[bindVar.type]
+          dir: oracledb[bindVar.dir] || bindVar.dir || oracledb.BIND_IN,
+          type: bindType
         };
         if (bindVar.hasOwnProperty("val")) {
-          transformed[key].val = bindVar.val;
+          if (bindType === oracledb.DB_TYPE_VECTOR && Array.isArray(bindVar.val) && !(bindVar.val instanceof Float32Array)) {
+            transformed[key].val = new Float32Array(bindVar.val);
+          } else {
+            transformed[key].val = bindVar.val;
+          }
         }
+        if (bindVar.maxSize) transformed[key].maxSize = bindVar.maxSize;
       }
     }
     return transformed;
@@ -115,6 +134,7 @@ module.exports = function (RED) {
 
         const resultAction = msg.resultAction || n.resultaction;
         const resultSetLimit = parseInt(msg.resultSetLimit || n.resultlimit, 10) || 100;
+        const txAction = (msg.txAction || msg.transaction || n.txaction || "auto").toLowerCase();
 
         let bindVars: any = null;
 
@@ -146,7 +166,7 @@ module.exports = function (RED) {
                 const payloadAsAny = msg.payload as any;
                 queryBinds.forEach(bindName => {
                     if (payloadAsAny.hasOwnProperty(bindName)) {
-                        cleanBinds[bindName] = payloadAsAny[bindName];
+                        cleanBinds[bindName] = normalizeBindValue(payloadAsAny[bindName]);
                     }
                 });
                 bindVars = cleanBinds;
@@ -163,15 +183,15 @@ module.exports = function (RED) {
                     } catch {
                         value = null;
                     }
-                    params.push(value);
+                    params.push(normalizeBindValue(value));
                 }
             } else if (Array.isArray(msg.payload)) {
-                params.push(...msg.payload);
+                params.push(...msg.payload.map(normalizeBindValue));
             }
             bindVars = params;
         }
 
-        node.server.query(msg, node, query, bindVars, resultAction, resultSetLimit, useMany);
+        node.server.query(msg, node, query, bindVars, resultAction, resultSetLimit, useMany, txAction);
     });
 
     initialize(node);
@@ -356,7 +376,7 @@ module.exports = function (RED) {
       }, delayMs);
     }
 
-    node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit, useMany) {
+    node.query = async function (msg, requestingNode, query, bindVars, resultAction, resultSetLimit, useMany, txAction) {
       if (!node.pool) {
         const errText = "Connection pool is not available.";
         requestingNode.error(errText, msg);
@@ -364,63 +384,155 @@ module.exports = function (RED) {
         return;
       }
 
-      const trimmedQuery = query.trim();
-      const finalQuery = isPLSQLBlock(trimmedQuery) ? trimmedQuery : trimmedQuery.replace(/;$/, "");
-      const t0 = Date.now();
-      let connection;
-      // If the pool is saturated, getConnection() can sit for seconds before
-      // returning. Show a "waiting..." badge so users see pool pressure without
-      // opening logs. Timer is cancelled as soon as the connection arrives.
-      const waitingTimer = setTimeout(() => {
-        requestingNode.status({ fill: "yellow", shape: "ring", text: `waiting for pool slot... (${node.pool.connectionsInUse}/${node.pool.connectionsOpen})` });
-      }, 150);
-      try {
-        connection = await withRetry(() => node.pool.getConnection(), "getConnection", requestingNode);
-        clearTimeout(waitingTimer);
-        samplePeaks();
-        const options: any = { autoCommit: true, outFormat: oracledb.OBJECT, maxRows: resultSetLimit };
-        if (!useMany) options.resultSet = resultAction === "multi";
+      const txMode = (txAction || msg.txAction || msg.transaction || "auto").toLowerCase();
+      const isTx = txMode === "begin" || txMode === "continue" || txMode === "commit" || txMode === "rollback";
 
-        const result: any = useMany
-          ? await withRetry(() => connection.executeMany(finalQuery, bindVars, options), "executeMany", requestingNode)
-          : await withRetry(() => connection.execute(finalQuery, bindVars || [], options), "execute", requestingNode);
+      let connection: any = null;
+      let shouldCloseConnection = !isTx || txMode === "commit" || txMode === "rollback";
+      const t0 = Date.now();
+      let waitingTimer: any = null;
+
+      try {
+        if (txMode === "continue" || txMode === "commit" || txMode === "rollback") {
+          if (!msg._oracleTx || !msg._oracleTx.connection) {
+            throw new Error(`Transaction error: '${txMode}' requested but no active transaction found on msg._oracleTx.`);
+          }
+          connection = msg._oracleTx.connection;
+          if (msg._oracleTx.timer) clearTimeout(msg._oracleTx.timer);
+        } else {
+          waitingTimer = setTimeout(() => {
+            requestingNode.status({ fill: "yellow", shape: "ring", text: `waiting for pool slot... (${node.pool.connectionsInUse}/${node.pool.connectionsOpen})` });
+          }, 150);
+          connection = await withRetry(() => node.pool.getConnection(), "getConnection", requestingNode);
+          clearTimeout(waitingTimer);
+          samplePeaks();
+        }
+
+        // Dynamic session tracing (SYS_CONTEXT USERENV attributes)
+        const action = msg.action || msg.oracleAction;
+        const moduleName = msg.module || msg.oracleModule || (requestingNode ? requestingNode.name : null) || "node-red";
+        const clientInfo = msg.clientInfo || msg.clientId || msg.user || msg.oracleClientInfo;
+        if (action && typeof connection.action !== "undefined") {
+          try { connection.action = String(action); } catch { /* ignore */ }
+        }
+        if (moduleName && typeof connection.module !== "undefined") {
+          try { connection.module = String(moduleName); } catch { /* ignore */ }
+        }
+        if (clientInfo && typeof connection.clientInfo !== "undefined") {
+          try { connection.clientInfo = String(clientInfo); } catch { /* ignore */ }
+        }
+
+        // If explicit rollback requested:
+        if (txMode === "rollback") {
+          await connection.rollback();
+          delete msg._oracleTx;
+          const elapsed = Date.now() - t0;
+          requestingNode.status({ fill: "yellow", shape: "ring", text: `tx: rolled back · ${elapsed}ms` });
+          scheduleStatusReset(requestingNode, 3000);
+          msg.oracle = { durationMs: elapsed, transaction: "rollback" };
+          requestingNode.send(msg);
+          return;
+        }
+
+        const trimmedQuery = (query || "").trim();
+        const finalQuery = isPLSQLBlock(trimmedQuery) ? trimmedQuery : trimmedQuery.replace(/;$/, "");
+
+        let result: any = null;
+        if (finalQuery.length > 0) {
+          const options: any = {
+            autoCommit: txMode === "auto",
+            outFormat: oracledb.OBJECT,
+            maxRows: resultSetLimit
+          };
+          if (!useMany) options.resultSet = resultAction === "multi";
+
+          result = useMany
+            ? await withRetry(() => connection.executeMany(finalQuery, bindVars, options), "executeMany", requestingNode)
+            : await withRetry(() => connection.execute(finalQuery, bindVars || [], options), "execute", requestingNode);
+        }
+
+        if (txMode === "commit") {
+          await connection.commit();
+          delete msg._oracleTx;
+        } else if (txMode === "begin") {
+          const txId = "tx_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+          const txTimer = setTimeout(async () => {
+            try {
+              await connection.rollback();
+              await connection.close();
+              requestingNode.warn(`Oracle transaction ${txId} timed out after 60s and was rolled back.`);
+            } catch { /* ignore */ }
+          }, 60000);
+          msg._oracleTx = {
+            txId,
+            connection,
+            timer: txTimer,
+            serverId: node.id,
+            startedAt: Date.now()
+          };
+        } else if (txMode === "continue") {
+          msg._oracleTx.timer = setTimeout(async () => {
+            try {
+              await connection.rollback();
+              await connection.close();
+              requestingNode.warn(`Oracle transaction ${msg._oracleTx.txId} timed out after 60s and was rolled back.`);
+            } catch { /* ignore */ }
+          }, 60000);
+        }
 
         const elapsed = Date.now() - t0;
-        // Detect statement kind for a more useful status badge. DDL (CREATE,
-        // DROP, ALTER, TRUNCATE, GRANT, etc.) always returns rowsAffected:0
-        // which would otherwise look like "0 affected" — misleading for a
-        // successful CREATE FUNCTION.
         const headWord = trimmedQuery.replace(/^\s+/, "").toUpperCase().split(/\s+/)[0] || "";
         const ddlVerbs = new Set(["CREATE", "DROP", "ALTER", "TRUNCATE", "GRANT", "REVOKE", "RENAME", "COMMENT"]);
         let summary: string;
-        if (useMany) {
-          summary = `batch: ${result.rowsAffected || 0} rows · ${elapsed}ms`;
-        } else if (result.rows) {
+        if (txMode === "commit") {
+          summary = `tx: committed · ${elapsed}ms`;
+        } else if (txMode === "begin") {
+          summary = `tx: begin · ${elapsed}ms`;
+        } else if (txMode === "continue") {
+          summary = `tx: continue · ${elapsed}ms`;
+        } else if (useMany) {
+          summary = `batch: ${(result && result.rowsAffected) || 0} rows · ${elapsed}ms`;
+        } else if (result && result.rows) {
           summary = `${result.rows.length} row${result.rows.length === 1 ? "" : "s"} · ${elapsed}ms`;
         } else if (ddlVerbs.has(headWord)) {
           summary = `${headWord.toLowerCase()} ok · ${elapsed}ms`;
         } else if (isPLSQLBlock(trimmedQuery)) {
           summary = `PL/SQL ok · ${elapsed}ms`;
-        } else if (typeof result.rowsAffected === "number") {
+        } else if (result && typeof result.rowsAffected === "number") {
           summary = `${result.rowsAffected} affected · ${elapsed}ms`;
         } else {
           summary = `done · ${elapsed}ms`;
         }
-        requestingNode.status({ fill: "green", shape: "dot", text: summary });
+        requestingNode.status({ fill: "green", shape: isTx && txMode !== "commit" ? "ring" : "dot", text: summary });
         scheduleStatusReset(requestingNode, 3000);
 
-        // Non-invasive stats sidecar — doesn't touch msg.payload shape.
+        // Stats sidecar
         const stats: any = {
           durationMs: elapsed,
           mode: useMany ? "batch" : (resultAction || "none"),
+          transaction: txMode,
           statementKind: ddlVerbs.has(headWord) ? "ddl"
             : isPLSQLBlock(trimmedQuery) ? "plsql"
             : (headWord === "SELECT" ? "query" : (headWord || "unknown").toLowerCase())
         };
-        if (typeof result.rowsAffected === "number") stats.rowsAffected = result.rowsAffected;
-        if (result.rows) stats.rows = result.rows.length;
+        if (action) stats.action = String(action);
+        if (moduleName) stats.module = String(moduleName);
+        if (clientInfo) stats.clientInfo = String(clientInfo);
+        if (result && typeof result.rowsAffected === "number") stats.rowsAffected = result.rowsAffected;
+        if (result && result.rows) stats.rows = result.rows.length;
 
-        if (useMany) {
+        function formatRowVectors(row: any): any {
+          if (!row || typeof row !== "object" || !msg.vectorAsArray) return row;
+          const copy = { ...row };
+          for (const k in copy) {
+            if (copy[k] instanceof Float32Array || copy[k] instanceof Float64Array) {
+              copy[k] = Array.from(copy[k]);
+            }
+          }
+          return copy;
+        }
+
+        if (useMany && result) {
           msg.payload = {
             rowsAffected: result.rowsAffected,
             outBinds: result.outBinds,
@@ -428,19 +540,19 @@ module.exports = function (RED) {
           };
           msg.oracle = stats;
           requestingNode.send(msg);
-        } else {
+        } else if (result) {
           switch (resultAction) {
             case "single": {
-              msg.payload = result.rows;
+              msg.payload = Array.isArray(result.rows) ? result.rows.map(formatRowVectors) : result.rows;
               msg.oracle = stats;
               requestingNode.send(msg);
               break;
             }
             case "single-meta": {
               msg.payload = {
-                  rowsAffected: result.rowsAffected,
-                  metaData: result.metaData,
-                  outBinds: result.outBinds
+                rowsAffected: result.rowsAffected,
+                metaData: result.metaData,
+                outBinds: result.outBinds
               };
               msg.oracle = stats;
               requestingNode.send(msg);
@@ -448,38 +560,50 @@ module.exports = function (RED) {
             }
             case "multi": {
               if (result.resultSet) {
-                  const resultSet = result.resultSet;
-                  let rows;
-                  let chunkIdx = 0;
-                  let totalRows = 0;
-                  do {
-                      rows = await resultSet.getRows(resultSetLimit);
-                      if (rows.length > 0) {
-                          totalRows += rows.length;
-                          const newMsg = RED.util.cloneMessage(msg);
-                          newMsg.payload = rows;
-                          newMsg.oracle = { ...stats, rows: rows.length, chunkIndex: chunkIdx++, totalRowsSoFar: totalRows };
-                          requestingNode.send(newMsg);
-                      }
-                  } while (rows.length > 0);
-                  await resultSet.close();
-                  // Update node status with final row count for streamed mode.
-                  requestingNode.status({ fill: "green", shape: "dot", text: `${totalRows} rows · ${Date.now() - t0}ms` });
-                  scheduleStatusReset(requestingNode, 3000);
+                const resultSet = result.resultSet;
+                let rows;
+                let chunkIdx = 0;
+                let totalRows = 0;
+                do {
+                  rows = await resultSet.getRows(resultSetLimit);
+                  if (rows.length > 0) {
+                    totalRows += rows.length;
+                    const newMsg = RED.util.cloneMessage(msg);
+                    newMsg.payload = rows.map(formatRowVectors);
+                    newMsg.oracle = { ...stats, rows: rows.length, chunkIndex: chunkIdx++, totalRowsSoFar: totalRows };
+                    requestingNode.send(newMsg);
+                  }
+                } while (rows.length > 0);
+                await resultSet.close();
+                requestingNode.status({ fill: "green", shape: isTx && txMode !== "commit" ? "ring" : "dot", text: `${totalRows} rows · ${Date.now() - t0}ms` });
+                scheduleStatusReset(requestingNode, 3000);
               }
               break;
             }
             case "none":
             default:
+              msg.oracle = stats;
+              if (txMode === "commit" || txMode === "begin" || txMode === "continue") {
+                requestingNode.send(msg);
+              }
               break;
           }
+        } else {
+          msg.oracle = stats;
+          requestingNode.send(msg);
         }
-      } catch (err) {
-        clearTimeout(waitingTimer);
-        let shortError = err.message.split("\n")[0];
-        // Decorate NJS-040 with pool snapshot — without this it's just
-        // "connection request timed out" and you can't tell why.
-        if (/NJS-040/.test(err.message) && node.pool) {
+      } catch (err: any) {
+        if (waitingTimer) clearTimeout(waitingTimer);
+        if (isTx && connection) {
+          try {
+            await connection.rollback();
+            await connection.close();
+          } catch { /* ignore */ }
+          delete msg._oracleTx;
+          shouldCloseConnection = false;
+        }
+        let shortError = err.message ? err.message.split("\n")[0] : String(err);
+        if (/NJS-040/.test(shortError) && node.pool) {
           try {
             const s = typeof node.pool.getStatistics === "function" ? node.pool.getStatistics() : null;
             const qLen = s ? s.currentQueueLength : "?";
@@ -490,10 +614,10 @@ module.exports = function (RED) {
         requestingNode.status({ fill: "red", shape: "dot", text: shortError });
         scheduleStatusReset(requestingNode, 5000);
       } finally {
-        if (connection) {
+        if (connection && shouldCloseConnection) {
           try {
             await connection.close();
-          } catch (err) {
+          } catch (err: any) {
             requestingNode.error("Error releasing connection: " + err.message);
           }
         }
@@ -639,6 +763,115 @@ module.exports = function (RED) {
     }
     if (!ordered.length) return res.json({ error: "no_path", tried: [] });
     tryNext(0, []);
+  });
+
+  // Returns database hierarchy (dbName, schemas, tables, views) for Schema Explorer
+  RED.httpAdmin.get("/oracle-server/:id/tables", RED.auth.needsPermission("flows.write"), async function (req, res) {
+    const node = RED.nodes.getNode(req.params.id);
+    if (!node || !node.pool) return res.json({ ok: false, error: "pool_not_available" });
+    let conn;
+    try {
+      conn = await node.pool.getConnection();
+
+      // Get DB name and current schema
+      const ctxRes = await conn.execute(
+        "SELECT SYS_CONTEXT('USERENV', 'DB_NAME') AS DB_NAME, SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AS CURRENT_SCHEMA FROM DUAL",
+        [],
+        { outFormat: oracledb.OBJECT }
+      );
+      const dbName = ctxRes.rows && ctxRes.rows[0] ? ctxRes.rows[0].DB_NAME : "";
+      const currentSchema = ctxRes.rows && ctxRes.rows[0] ? ctxRes.rows[0].CURRENT_SCHEMA : "";
+
+      // Fast lookup of user/application schemas
+      const schemasRes = await conn.execute(`
+        SELECT username AS owner
+        FROM all_users
+        WHERE oracle_maintained = 'N'
+        ORDER BY username
+      `, [], { outFormat: oracledb.OBJECT });
+      const schemas = (schemasRes.rows || []).map((r: any) => r.OWNER);
+      if (currentSchema && !schemas.includes(currentSchema)) {
+        schemas.unshift(currentSchema);
+      }
+
+      const reqQuery = req.query || {};
+      const targetSchema = reqQuery.schema ? String(reqQuery.schema).toUpperCase() : (currentSchema || (schemas.length ? schemas[0] : ""));
+      let query: string;
+      const binds: any = {};
+
+      if (targetSchema) {
+        query = `
+          SELECT owner, table_name, 'TABLE' AS object_type
+          FROM all_tables
+          WHERE owner = :schema
+          UNION ALL
+          SELECT owner, view_name AS table_name, 'VIEW' AS object_type
+          FROM all_views
+          WHERE owner = :schema
+          ORDER BY object_type, table_name
+        `;
+        binds.schema = targetSchema;
+      } else {
+        query = `
+          SELECT owner, table_name, 'TABLE' AS object_type
+          FROM all_tables
+          WHERE owner IN (SELECT username FROM all_users WHERE oracle_maintained = 'N')
+          UNION ALL
+          SELECT owner, view_name AS table_name, 'VIEW' AS object_type
+          FROM all_views
+          WHERE owner IN (SELECT username FROM all_users WHERE oracle_maintained = 'N')
+          ORDER BY owner, object_type, table_name
+          FETCH FIRST 200 ROWS ONLY
+        `;
+      }
+
+      const result = await conn.execute(query, binds, { outFormat: oracledb.OBJECT });
+      res.json({
+        ok: true,
+        dbName,
+        currentSchema,
+        schemas,
+        tables: result.rows
+      });
+    } catch (err: any) {
+      res.json({ ok: false, error: err.message ? err.message.split("\n")[0] : String(err) });
+    } finally {
+      if (conn) { try { await conn.close(); } catch { /* ignore */ } }
+    }
+  });
+
+  // Returns column definitions for a selected table in the Schema Explorer
+  RED.httpAdmin.get("/oracle-server/:id/columns", RED.auth.needsPermission("flows.write"), async function (req, res) {
+    const node = RED.nodes.getNode(req.params.id);
+    if (!node || !node.pool) return res.json({ ok: false, error: "pool_not_available" });
+    const reqQuery = req.query || {};
+    const tableName = String(reqQuery.table || "").toUpperCase();
+    const owner = reqQuery.owner ? String(reqQuery.owner).toUpperCase() : "";
+    if (!tableName) return res.json({ ok: false, error: "table_required" });
+
+    let conn;
+    try {
+      conn = await node.pool.getConnection();
+      let query = `
+        SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, identity_column, virtual_column
+        FROM all_tab_cols
+        WHERE table_name = :tableName
+          AND hidden_column = 'NO'
+          AND virtual_column = 'NO'
+      `;
+      const binds: any = { tableName };
+      if (owner) {
+        query += " AND owner = :owner";
+        binds.owner = owner;
+      }
+      query += " ORDER BY column_id";
+      const result = await conn.execute(query, binds, { outFormat: oracledb.OBJECT });
+      res.json({ ok: true, columns: result.rows });
+    } catch (err: any) {
+      res.json({ ok: false, error: err.message ? err.message.split("\n")[0] : String(err) });
+    } finally {
+      if (conn) { try { await conn.close(); } catch { /* ignore */ } }
+    }
   });
 
   RED.nodes.registerType("oracledb", OracleDb);

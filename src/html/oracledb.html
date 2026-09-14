@@ -18,9 +18,29 @@
               </div>
         </div>
         <div id="oracle-out-tab-query" style="display:none">
-            <div class="form-row" style="margin-bottom: 0px">
+            <div class="form-row" style="margin-bottom: 8px">
                 <input type="checkbox" id="node-input-usequery" style="display: inline-block; width: auto; vertical-align: top;">
-                <label for="node-input-usequery" style="width: 80%;">always execute this Oracle SQL statement (even if <i>msg.query</i> exists):</label>
+                <label for="node-input-usequery" style="width: 70%;">always execute this Oracle SQL statement (even if <i>msg.query</i> exists)</label>
+                <button type="button" id="node-btn-browse-schema" class="red-ui-button red-ui-button-small" style="float: right;"><i class="fa fa-database"></i> Browse Schema</button>
+            </div>
+            <div id="schema-browser-panel" style="display:none; margin-bottom: 10px; border: 1px solid #ddd; padding: 8px 10px; border-radius: 4px; background: #fafafa; max-height: 320px; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 6px; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                    <span id="schema-browser-db-info" style="font-weight: bold; font-size: 11px; color: #2d3748;"><i class="fa fa-database"></i> Database: Loading...</span>
+                    <button type="button" id="schema-browser-close" class="red-ui-button red-ui-button-small">Close</button>
+                </div>
+                <div style="display:flex; gap: 6px; margin-bottom: 6px; align-items: center;">
+                    <select id="schema-browser-schema-select" style="width: 36%; font-size: 11px; height: 26px;">
+                        <option value="">All Schemas</option>
+                    </select>
+                    <select id="schema-browser-type-select" style="width: 26%; font-size: 11px; height: 26px;">
+                        <option value="ALL">All Types</option>
+                        <option value="TABLE">Tables</option>
+                        <option value="VIEW">Views</option>
+                    </select>
+                    <input type="text" id="schema-browser-filter" placeholder="Filter objects..." style="flex: 1; font-size: 11px; height: 26px;">
+                </div>
+                <div id="schema-browser-status" style="font-size: 11px; color: #666; margin-bottom: 4px;"></div>
+                <div id="schema-browser-list" style="font-family: monospace; font-size: 12px;"></div>
             </div>
 
             <div class="form-row node-input-query-text-editor-row">
@@ -40,6 +60,17 @@
             </div>
         </div>
         <div id="oracle-out-tab-results" style="display:none">
+            <div class="form-row">
+                <label for="node-input-txaction"><i class="fa fa-exchange"></i> Transaction</label>
+                <select type="text" id="node-input-txaction" style="width: 270px;">
+                    <option value="auto" selected>Auto-commit (standalone)</option>
+                    <option value="begin">Begin Transaction (pass via msg._oracleTx)</option>
+                    <option value="continue">Continue Transaction</option>
+                    <option value="commit">Commit Transaction</option>
+                    <option value="rollback">Rollback Transaction</option>
+                </select>
+            </div>
+
             <div class="form-row">
                 <label for="node-input-resultaction"><i class="fa fa-hand-o-right"></i> Action</label>
                 <select type="text" id="node-input-resultaction" style="width: 270px;">
@@ -110,6 +141,15 @@
 msg.payload = [ {id:1, name:"a"}, {id:2, name:"b"}, /* ... */ ];
 msg.executeMany = true;
 // query: INSERT INTO t (id, name) VALUES (:id, :name)</pre>
+
+  <h3>Transactions</h3>
+  <p>To execute multi-node atomic transactions across a flow, select <b>Begin Transaction</b> on the first node, <b>Continue Transaction</b> on intermediate nodes, and <b>Commit Transaction</b> on the final node. Wire error handling or a Catch node to a node configured with <b>Rollback Transaction</b>. Transactions pass an open connection handle on <code>msg._oracleTx</code> and include a 60-second safety rollback timer to guard against connection pool leaks.</p>
+
+  <h3>Observability & Session Tracing</h3>
+  <p>Pass <code>msg.action</code>, <code>msg.module</code>, or <code>msg.clientId</code> to tag your statements in Oracle Database's <code>V$SESSION</code> and OCI Performance Hub. The node automatically includes these in the <code>msg.oracle</code> stats sidecar object.</p>
+
+  <h3>Oracle AI Database 23ai / 26ai Vectors</h3>
+  <p>To bind vectors for AI similarity search (<code>VECTOR_DISTANCE</code>), pass a JavaScript <code>Float32Array</code> or <code>Float64Array</code> in <code>msg.payload</code> or <code>msg.bindVars</code>. The node automatically binds them as native Oracle <code>DB_TYPE_VECTOR</code>.</p>
 
   <h3>Executing Scripts</h3>
   <p>

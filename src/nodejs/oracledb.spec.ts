@@ -28,6 +28,7 @@ const {
 
 const testNodes: any = {};
 const httpRoutes: any = { get: {}, post: {} };
+const nodeRegistry: any = {};
 
 const REDmock: any = {
   nodes: {
@@ -47,7 +48,8 @@ const REDmock: any = {
       node.emit = (event: string, payload: any) => node._emitter.emit(event, payload);
     },
     registerType: function (nodeName: string, constructor: any) { testNodes[nodeName] = constructor; },
-    getNode: (id: any) => id,
+    registerNode: function (id: string, node: any) { nodeRegistry[id] = node; },
+    getNode: (id: any) => nodeRegistry[id] || (typeof id === "object" ? id : null),
     getCredentials: (_id: any) => ({ user: ORACLEDBTEST_USER, password: ORACLEDBTEST_PASSWORD }),
     util: { cloneMessage: (msg: any) => JSON.parse(JSON.stringify(msg)) }
   },
@@ -185,6 +187,89 @@ describe("Editor endpoints (httpAdmin)", function () {
         process.env.TNS_ADMIN = savedEnv;
         expect(data).to.have.property("error", "no_path");
         done();
+      }
+    });
+  });
+
+  it("tables endpoint returns pool_not_available when node has no pool", function (done) {
+    const handler = httpRoutes.get["/oracle-server/:id/tables"];
+    handler({ params: { id: "non-existent-node" } }, {
+      json: (data: any) => {
+        expect(data).to.have.property("ok", false);
+        expect(data).to.have.property("error", "pool_not_available");
+        done();
+      }
+    });
+  });
+
+  it("columns endpoint returns table_required when table parameter is missing", function (done) {
+    const handler = httpRoutes.get["/oracle-server/:id/columns"];
+    REDmock.nodes.registerNode("dummy-server", { pool: {} });
+    handler({ params: { id: "dummy-server" }, query: {} }, {
+      json: (data: any) => {
+        expect(data).to.have.property("ok", false);
+        expect(data).to.have.property("error", "table_required");
+        done();
+      }
+    });
+  });
+
+  it("rejects continue transaction when msg._oracleTx is missing", function (done) {
+    const testServer = new testNodes["oracle-server"](serverConfig);
+    testServer.pool = { getConnection: () => Promise.resolve({}) };
+    const queryNode = makeQueryNodeMock(() => {
+      done(new Error("should have failed"));
+    }, (err) => {
+      expect(err).to.include("no active transaction found");
+      done();
+    });
+    testServer.query({}, queryNode, "SELECT 1 FROM DUAL", [], "single", 100, false, "continue");
+  });
+
+  it("rejects commit transaction when msg._oracleTx is missing", function (done) {
+    const testServer = new testNodes["oracle-server"](serverConfig);
+    testServer.pool = { getConnection: () => Promise.resolve({}) };
+    const queryNode = makeQueryNodeMock(() => {
+      done(new Error("should have failed"));
+    }, (err) => {
+      expect(err).to.include("no active transaction found");
+      done();
+    });
+    testServer.query({}, queryNode, "", [], "single", 100, false, "commit");
+  });
+
+  it("rejects rollback transaction when msg._oracleTx is missing", function (done) {
+    const testServer = new testNodes["oracle-server"](serverConfig);
+    testServer.pool = { getConnection: () => Promise.resolve({}) };
+    const queryNode = makeQueryNodeMock(() => {
+      done(new Error("should have failed"));
+    }, (err) => {
+      expect(err).to.include("no active transaction found");
+      done();
+    });
+    testServer.query({}, queryNode, "", [], "single", 100, false, "rollback");
+  });
+
+  it("bindVars transforms type VECTOR and converts regular array to Float32Array", function (done) {
+    const queryConfig = {
+      name: "Vector transform test",
+      query: "SELECT :v FROM DUAL",
+      server: "mock-server-id",
+      resultaction: "single"
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    queryNode.server = {
+      query: (_msg: any, _node: any, _query: string, bindVars: any) => {
+        expect(bindVars).to.have.property("v");
+        expect(bindVars.v.val).to.be.instanceOf(Float32Array);
+        expect(bindVars.v.val[0]).to.equal(1.5);
+        expect(bindVars.v.val[1]).to.equal(2.5);
+        done();
+      }
+    };
+    queryNode.emit("input", {
+      bindVars: {
+        v: { type: "VECTOR", dir: "BIND_IN", val: [1.5, 2.5] }
       }
     });
   });
@@ -378,6 +463,181 @@ describe("Live Database Tests (thin mode)", function () {
         done();
       }
     });
+  });
+
+  it("executes query with dynamic session tracing", function (done) {
+    const queryNode = makeQueryNodeMock((msg: any) => {
+      expect(msg.oracle).to.be.an("object");
+      expect(msg.oracle.action).to.equal("order-processing");
+      expect(msg.oracle.module).to.equal("inventory-service");
+      expect(msg.oracle.clientInfo).to.equal("user-test-42");
+      expect(msg.payload[0].ACT).to.equal("order-processing");
+      expect(msg.payload[0].MOD).to.equal("inventory-service");
+      expect(msg.payload[0].CI).to.equal("user-test-42");
+      done();
+    }, (err) => done(new Error(err)));
+    const query = "SELECT SYS_CONTEXT('USERENV', 'ACTION') AS ACT, SYS_CONTEXT('USERENV', 'MODULE') AS MOD, SYS_CONTEXT('USERENV', 'CLIENT_INFO') AS CI FROM DUAL";
+    serverNode.query(
+      { action: "order-processing", module: "inventory-service", clientInfo: "user-test-42" },
+      queryNode,
+      query,
+      [],
+      "single",
+      100
+    );
+  });
+
+  it("binds native Float32Array vector and computes VECTOR_DISTANCE", function (done) {
+    const queryNode = makeQueryNodeMock((msg: any) => {
+      expect(msg.payload).to.be.an("array").with.lengthOf(1);
+      expect(msg.payload[0].DIST).to.be.a("number");
+      expect(msg.payload[0].DIST).to.equal(1);
+      done();
+    }, (err) => done(new Error(err)));
+    const query = "SELECT VECTOR_DISTANCE(VECTOR('[1, 2, 3]'), :v, EUCLIDEAN) AS DIST FROM DUAL";
+    const binds = { v: new Float32Array([1, 2, 4]) };
+    serverNode.query({}, queryNode, query, binds, "single", 100);
+  });
+
+  it("multi-node transaction: executes across nodes with rollback and commit", async function () {
+    const conn = await serverNode.pool.getConnection();
+    try { await conn.execute("DROP TABLE TEST_UNICORN_TX"); } catch { /* ignore */ }
+    await conn.execute("CREATE TABLE TEST_UNICORN_TX (id NUMBER, val VARCHAR2(50))");
+    await conn.close();
+
+    // 1. Begin transaction
+    const msg1: any = { payload: { id: 1, val: "temp-row" } };
+    await new Promise<void>((resolve, reject) => {
+      const qn1 = makeQueryNodeMock((m: any) => {
+        expect(m._oracleTx).to.be.an("object");
+        expect(m._oracleTx.txId).to.be.a("string");
+        resolve();
+      }, reject);
+      serverNode.query(msg1, qn1, "INSERT INTO TEST_UNICORN_TX (id, val) VALUES (:id, :val)", msg1.payload, "none", 100, false, "begin");
+    });
+
+    // 2. Rollback transaction
+    await new Promise<void>((resolve, reject) => {
+      const qn2 = makeQueryNodeMock((m: any) => {
+        expect(m._oracleTx).to.be.undefined;
+        resolve();
+      }, reject);
+      serverNode.query(msg1, qn2, "", [], "none", 100, false, "rollback");
+    });
+
+    // Verify 0 rows exist after rollback
+    const verifyConn1 = await serverNode.pool.getConnection();
+    const countRes1 = await verifyConn1.execute("SELECT COUNT(*) AS CNT FROM TEST_UNICORN_TX");
+    await verifyConn1.close();
+    expect(countRes1.rows[0][0]).to.equal(0);
+
+    // 3. Begin + Commit
+    const msg2: any = { payload: { id: 2, val: "persisted-row" } };
+    await new Promise<void>((resolve, reject) => {
+      const qn3 = makeQueryNodeMock(() => resolve(), reject);
+      serverNode.query(msg2, qn3, "INSERT INTO TEST_UNICORN_TX (id, val) VALUES (:id, :val)", msg2.payload, "none", 100, false, "begin");
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const qn4 = makeQueryNodeMock(() => resolve(), reject);
+      serverNode.query(msg2, qn4, "", [], "none", 100, false, "commit");
+    });
+
+    // Verify 1 row committed
+    const verifyConn2 = await serverNode.pool.getConnection();
+    const countRes2 = await verifyConn2.execute("SELECT COUNT(*) AS CNT FROM TEST_UNICORN_TX");
+    await verifyConn2.execute("DROP TABLE TEST_UNICORN_TX");
+    await verifyConn2.close();
+    expect(countRes2.rows[0][0]).to.equal(1);
+  });
+
+  it("live schema explorer endpoints return accessible tables and columns", function (done) {
+    REDmock.nodes.registerNode("live-server-node", serverNode);
+    const tablesHandler = httpRoutes.get["/oracle-server/:id/tables"];
+    const columnsHandler = httpRoutes.get["/oracle-server/:id/columns"];
+
+    tablesHandler({ params: { id: "live-server-node" }, query: {} }, {
+      json: (data: any) => {
+        if (!data.ok) return done(new Error(data.error));
+        expect(data).to.have.property("ok", true);
+        expect(data).to.have.property("dbName");
+        expect(data.schemas).to.be.an("array").with.length.greaterThan(0);
+        expect(data.tables).to.be.an("array").with.length.greaterThan(0);
+        const sampleTable = data.tables[0];
+        expect(sampleTable).to.have.property("TABLE_NAME");
+        expect(sampleTable).to.have.property("OWNER");
+
+        columnsHandler({ params: { id: "live-server-node" }, query: { table: sampleTable.TABLE_NAME, owner: sampleTable.OWNER } }, {
+          json: (colData: any) => {
+            if (!colData.ok) return done(new Error(colData.error));
+            expect(colData).to.have.property("ok", true);
+            expect(colData.columns).to.be.an("array").with.length.greaterThan(0);
+            expect(colData.columns[0]).to.have.property("COLUMN_NAME");
+            done();
+          }
+        });
+      }
+    });
+  });
+
+  it("binds positional Float32Array vector via msg.payload array", function (done) {
+    const queryConfig = {
+      name: "Positional vector query",
+      query: "SELECT VECTOR_DISTANCE(VECTOR('[1, 2, 3]'), :1, EUCLIDEAN) AS DIST FROM DUAL",
+      server: "mock-server-id",
+      resultaction: "single"
+    };
+    const queryNode = new testNodes["oracledb"](queryConfig);
+    queryNode.server = serverNode;
+    queryNode.send = (msg: any) => {
+      expect(msg.payload).to.be.an("array").with.lengthOf(1);
+      expect(msg.payload[0].DIST).to.equal(1);
+      done();
+    };
+    queryNode.error = (err: any) => done(new Error(err));
+    queryNode.emit("input", { payload: [ new Float32Array([1, 2, 4]) ] });
+  });
+
+  it("formats returned vector as plain JavaScript Array when msg.vectorAsArray is true", function (done) {
+    const queryNode = makeQueryNodeMock((msg: any) => {
+      expect(msg.payload).to.be.an("array").with.lengthOf(1);
+      expect(Array.isArray(msg.payload[0].V)).to.equal(true);
+      expect(msg.payload[0].V).to.deep.equal([1, 2, 3]);
+      done();
+    }, (err) => done(new Error(err)));
+    const query = "SELECT VECTOR('[1, 2, 3]', 3, FLOAT32) AS V FROM DUAL";
+    serverNode.query({ vectorAsArray: true }, queryNode, query, [], "single", 100);
+  });
+
+  it("automatically rolls back and frees connection on SQL error inside transaction", async function () {
+    const initialInUse = serverNode.pool.connectionsInUse;
+
+    const msg: any = {};
+    await new Promise<void>((resolve) => {
+      const qn1 = makeQueryNodeMock(() => {
+        resolve();
+      }, () => resolve());
+      serverNode.query(msg, qn1, "SELECT 1 FROM DUAL", [], "single", 100, false, "begin");
+    });
+
+    expect(msg._oracleTx).to.be.an("object");
+    expect(msg._oracleTx.txId).to.be.a("string");
+
+    // Execute invalid query in same transaction -> should fail, auto-rollback, and delete msg._oracleTx
+    await new Promise<void>((resolve) => {
+      const qn2 = makeQueryNodeMock(() => {
+        resolve();
+      }, (err: any) => {
+        expect(err).to.include("Oracle query error");
+        expect(msg._oracleTx).to.be.undefined;
+        resolve();
+      });
+      serverNode.query(msg, qn2, "SELECT * FROM NON_EXISTENT_UNICORN_TABLE_XYZ", [], "single", 100, false, "continue");
+    });
+
+    // Verify connection was returned to pool
+    await new Promise((r) => setTimeout(r, 200));
+    expect(serverNode.pool.connectionsInUse).to.equal(initialInUse);
   });
 
   after(async function () {
