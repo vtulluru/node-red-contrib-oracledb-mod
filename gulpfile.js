@@ -1,16 +1,11 @@
 const { src, dest, series, parallel, watch } = require('gulp');
 const concat = require('gulp-concat');
-const ts = require('gulp-typescript');
-const eslint = require('gulp-eslint-new');
-const sourcemaps = require('gulp-sourcemaps');
-const mocha = require('gulp-spawn-mocha');
+const path = require('path');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const node_red_root = process.env.NODE_RED_ROOT;
-
-// Create separate TypeScript projects from the new config files.
-// This is the key to solving the compilation and scope issues.
-const tsBackendProject = ts.createProject('src/nodejs/tsconfig.json');
-const tsFrontendProject = ts.createProject('src/html/tsconfig.json');
 
 // A simple error handler for the 'watch' task
 function swallowError(error) {
@@ -25,30 +20,20 @@ async function clean() {
 }
 
 // Lints the backend TypeScript source files
-function lint() {
-  return src('src/nodejs/**/*.ts') // Only lint backend code
-    .pipe(eslint())
-    .pipe(eslint.format())
-    .pipe(eslint.failAfterError());
+async function lint() {
+  const { stdout, stderr } = await execPromise('npx eslint src/nodejs/**/*.ts');
+  if (stdout) console.log(stdout);
+  if (stderr) console.error(stderr);
 }
 
 // Compiles the backend TypeScript code (Node.js)
-function compileBackend() {
-  return src('src/nodejs/**/*.ts')
-    .pipe(sourcemaps.init())
-    .pipe(eslint())
-    .pipe(eslint.format())
-    .pipe(tsBackendProject())
-    .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../../src/nodejs' }))
-    .pipe(dest('transpiled/nodejs'));
+async function compileBackend() {
+  await execPromise('npx tsc -p src/nodejs/tsconfig.json');
 }
 
 // Compiles the frontend TypeScript code (Editor)
-function compileFrontend() {
-  // We do not lint the frontend code as it uses a different style (e.g., global RED object)
-  return src('src/html/**/*.ts')
-    .pipe(tsFrontendProject())
-    .pipe(dest('transpiled/html'));
+async function compileFrontend() {
+  await execPromise('npx tsc -p src/html/tsconfig.json');
 }
 
 // Combines both compile tasks to run in parallel
@@ -76,13 +61,16 @@ function buildJs() {
 const buildLib = series(compile, parallel(buildHtml, buildJs));
 
 // Runs the unit tests
-function test() {
-  return src('transpiled/nodejs/**/*.spec.js', { read: false })
-    .pipe(mocha({
-      r: 'tools/mocha/setup.js',
-      reporter: 'dot'
-    }))
-    .on('error', swallowError);
+async function test() {
+  try {
+    const { stdout, stderr } = await execPromise('npx mocha --require tools/mocha/setup.js --reporter dot "transpiled/nodejs/**/*.spec.js"');
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+  } catch (err) {
+    if (err.stdout) process.stdout.write(err.stdout);
+    if (err.stderr) process.stderr.write(err.stderr);
+    throw err;
+  }
 }
 
 // Exported Gulp tasks

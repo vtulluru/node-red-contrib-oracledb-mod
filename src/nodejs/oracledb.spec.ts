@@ -10,6 +10,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 const EventEmitter = require("events");
+const fs = require("fs");
 const expect = Chai.expect;
 
 const oracleNodes = require("../../lib/oracledb");
@@ -164,7 +165,7 @@ describe("Editor endpoints (httpAdmin)", function () {
   });
 
   it("tnsnames endpoint parses aliases when wallet is present", function (done) {
-    if (!ORACLEDBTEST_TNS_ADMIN) { this.skip(); return; }
+    if (!ORACLEDBTEST_TNS_ADMIN || !fs.existsSync(ORACLEDBTEST_TNS_ADMIN)) { this.skip(); return; }
     const handler = httpRoutes.get["/oracle-server/tnsnames"];
     handler({ query: { dir: ORACLEDBTEST_TNS_ADMIN } }, {
       json: (data: any) => {
@@ -192,7 +193,7 @@ describe("Editor endpoints (httpAdmin)", function () {
 // ---------- LIVE TESTS ----------
 describe("Live Database Tests (thin mode)", function () {
   this.timeout(20000);
-  const canRunLive = !!(ORACLEDBTEST_USER && ORACLEDBTEST_PASSWORD && ORACLEDBTEST_TNS_NAME && ORACLEDBTEST_TNS_ADMIN);
+  const canRunLive = !!(ORACLEDBTEST_USER && ORACLEDBTEST_PASSWORD && ORACLEDBTEST_TNS_NAME && ORACLEDBTEST_TNS_ADMIN && fs.existsSync(ORACLEDBTEST_TNS_ADMIN));
 
   let serverNode: any;
 

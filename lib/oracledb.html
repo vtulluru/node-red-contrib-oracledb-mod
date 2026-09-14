@@ -284,6 +284,7 @@ msg.executeMany = true;
   </p>
 </script>
 <script type="text/javascript">
+"use strict";
 //
 // -- oracle server --------------------------------------------------------------------------------
 //
@@ -318,7 +319,7 @@ RED.nodes.registerType("oracle-server", {
         return this.connectionname;
     },
     oneditprepare: function () {
-        var tabs = RED.tabs.create({
+        const tabs = RED.tabs.create({
             id: "node-config-oracle-server-tabs",
             onchange: function (tab) {
                 $("#node-config-oracle-server-tabs-content").children().hide();
@@ -331,8 +332,8 @@ RED.nodes.registerType("oracle-server", {
         // --- Legacy migration detection ---
         // Pre-0.8 configs have instantclientpath set but no usethickmode field.
         // We coerce them into thick mode and show the migration warning.
-        var self = this;
-        var isLegacy = !!self.instantclientpath && (self.usethickmode === undefined || self.usethickmode === null);
+        const self = this;
+        const isLegacy = !!self.instantclientpath && (self.usethickmode === undefined || self.usethickmode === null);
         if (isLegacy) {
             $("#node-config-input-usethickmode").val("true");
             $("#legacy-thick-warning").show();
@@ -342,7 +343,7 @@ RED.nodes.registerType("oracle-server", {
         }
         // --- Driver mode toggle ---
         function refreshModeFields() {
-            var thick = String($("#node-config-input-usethickmode").val()) === "true";
+            const thick = String($("#node-config-input-usethickmode").val()) === "true";
             $(".thick-only").toggle(thick);
             $(".thin-only").toggle(!thick);
             // Hide the legacy warning if user has switched to thin
@@ -353,11 +354,11 @@ RED.nodes.registerType("oracle-server", {
         refreshModeFields();
         // --- TNS alias auto-discovery from wallet/TNS_ADMIN ---
         function loadTnsAliases() {
-            var dir = String($("#node-config-input-configdir").val() || "").trim();
-            var wallet = String($("#node-config-input-walletlocation").val() || "").trim();
-            var $status = $("#oracle-tns-status");
-            var $list = $("#oracle-tns-aliases");
-            var params = [];
+            const dir = String($("#node-config-input-configdir").val() || "").trim();
+            const wallet = String($("#node-config-input-walletlocation").val() || "").trim();
+            const $status = $("#oracle-tns-status");
+            const $list = $("#oracle-tns-aliases");
+            const params = [];
             if (dir)
                 params.push("dir=" + encodeURIComponent(dir));
             if (wallet)
@@ -366,14 +367,14 @@ RED.nodes.registerType("oracle-server", {
             $.getJSON("oracle-server/tnsnames?" + params.join("&"), function (data) {
                 $list.empty();
                 if (data && Array.isArray(data.aliases) && data.aliases.length) {
-                    data.aliases.forEach(function (a) { return $list.append($("<option>").attr("value", a)); });
+                    data.aliases.forEach((a) => $list.append($("<option>").attr("value", a)));
                     $status.text(data.aliases.length + " aliases from " + data.source);
                 }
                 else if (data && data.error === "no_path") {
                     $status.text("(set Wallet / TNS_ADMIN, or TNS_ADMIN env, to auto-load)");
                 }
                 else if (data && data.error === "not_found") {
-                    var tried = (data.tried || []).join(", ");
+                    const tried = (data.tried || []).join(", ");
                     $status.text("no tnsnames.ora found (tried: " + tried + ")");
                 }
                 else {
@@ -387,7 +388,7 @@ RED.nodes.registerType("oracle-server", {
         // signal than a placeholder. "Edit" link lets them override.
         $.getJSON("oracle-server/env", function (env) {
             if (env && env.TNS_ADMIN) {
-                var $cd = $("#node-config-input-configdir");
+                const $cd = $("#node-config-input-configdir");
                 if (!String($cd.val() || "").trim()) {
                     $cd.val(env.TNS_ADMIN).prop("readonly", true).css("background-color", "#f4f4f4");
                     $("#oracle-configdir-edit").show();
@@ -407,7 +408,7 @@ RED.nodes.registerType("oracle-server", {
         function runTest($status, $result) {
             $status.html('<i class="fa fa-spinner fa-spin"></i> Testing...').css("color", "#888");
             $result.hide().empty();
-            var body = {
+            const body = {
                 nodeId: self.id || null,
                 usethickmode: String($("#node-config-input-usethickmode").val()) === "true",
                 instantclientpath: $("#node-config-input-instantclientpath").val(),
@@ -428,13 +429,13 @@ RED.nodes.registerType("oracle-server", {
                 data: JSON.stringify(body)
             }).done(function (data) {
                 if (data.ok) {
-                    var t = data.timing || {};
-                    var timingTxt = t.connectMs != null ? " \u00B7 ".concat(t.connectMs, "ms connect, ").concat(t.totalMs, "ms total") : "";
+                    const t = data.timing || {};
+                    const timingTxt = t.connectMs != null ? ` · ${t.connectMs}ms connect, ${t.totalMs}ms total` : "";
                     $status.html('<i class="fa fa-check-circle"></i> Connected (' + data.mode + ' mode)' + timingTxt).css("color", "#3a8f3a");
-                    var info = data.info || {};
-                    var aliasesInWallet_1 = [];
-                    $("#oracle-tns-aliases option").each(function () { aliasesInWallet_1.push($(this).attr("value")); });
-                    var lines_1 = [
+                    const info = data.info || {};
+                    const aliasesInWallet = [];
+                    $("#oracle-tns-aliases option").each(function () { aliasesInWallet.push($(this).attr("value")); });
+                    const lines = [
                         "Connect string : " + data.connectString,
                         "Database name  : " + (info.DB_NAME || "(n/a)"),
                         "Service name   : " + (info.SERVICE || "(n/a)"),
@@ -444,27 +445,27 @@ RED.nodes.registerType("oracle-server", {
                         "Connect time   : " + (t.connectMs != null ? t.connectMs + " ms" : "(n/a)"),
                         "Total time     : " + (t.totalMs != null ? t.totalMs + " ms" : "(n/a)")
                     ];
-                    if (aliasesInWallet_1.length) {
-                        lines_1.push("");
-                        lines_1.push("Other services in wallet:");
-                        aliasesInWallet_1.forEach(function (a) {
+                    if (aliasesInWallet.length) {
+                        lines.push("");
+                        lines.push("Other services in wallet:");
+                        aliasesInWallet.forEach(a => {
                             if (a !== body.tnsname)
-                                lines_1.push("  - " + a);
+                                lines.push("  - " + a);
                         });
                     }
                     if (Array.isArray(data.schemas) && data.schemas.length) {
-                        lines_1.push("");
-                        lines_1.push("Accessible schemas (" + data.schemaTotal + "):");
-                        var shown = data.schemas.slice(0, 30);
-                        shown.forEach(function (s) { return lines_1.push("  - " + s); });
+                        lines.push("");
+                        lines.push("Accessible schemas (" + data.schemaTotal + "):");
+                        const shown = data.schemas.slice(0, 30);
+                        shown.forEach((s) => lines.push("  - " + s));
                         if (data.schemaTotal > shown.length) {
-                            lines_1.push("  ... +" + (data.schemaTotal - shown.length) + " more");
+                            lines.push("  ... +" + (data.schemaTotal - shown.length) + " more");
                         }
                     }
-                    $result.text(lines_1.join("\n")).show();
+                    $result.text(lines.join("\n")).show();
                 }
                 else {
-                    var tFail = data.timing && data.timing.totalMs != null ? " (after ".concat(data.timing.totalMs, "ms)") : "";
+                    const tFail = data.timing && data.timing.totalMs != null ? ` (after ${data.timing.totalMs}ms)` : "";
                     $status.html('<i class="fa fa-times-circle"></i> Failed' + tFail).css("color", "#c33");
                     $result.text("Error: " + data.error + "\nConnect string: " + data.connectString).show();
                 }
@@ -475,14 +476,14 @@ RED.nodes.registerType("oracle-server", {
         // --- Pool stats panel ---
         // The button toggles a panel that auto-refreshes every 2s while open.
         // Requires the config to be deployed (we need a node id to fetch stats).
-        var statsTimer = null;
+        let statsTimer = null;
         self._stopStatsTimer = function () { if (statsTimer) {
             clearInterval(statsTimer);
             statsTimer = null;
         } };
         function fetchStats() {
-            var id = self.id;
-            var $panel = $("#oracle-stats-panel");
+            const id = self.id;
+            const $panel = $("#oracle-stats-panel");
             if (!id) {
                 $panel.text("Save and Deploy this config first to inspect live pool stats.").show();
                 return;
@@ -492,8 +493,8 @@ RED.nodes.registerType("oracle-server", {
                     $panel.text("Pool not available: " + (data.error || "unknown")).show();
                     return;
                 }
-                var s = data.summary;
-                var lines = [
+                const s = data.summary;
+                const lines = [
                     "Driver mode      : " + data.mode,
                     "Open / In use    : " + s.connectionsOpen + " / " + s.connectionsInUse,
                     "Pool bounds      : min=" + s.poolMin + ", max=" + s.poolMax,
@@ -534,7 +535,7 @@ RED.nodes.registerType("oracle-server", {
         // --- Classic vs TNS toggle (unchanged behavior) ---
         $(".connection-type").hide();
         $("#node-config-input-connectiontype").on("change", function (evt) {
-            var ct = evt.currentTarget;
+            const ct = evt.currentTarget;
             if (ct.value === "TNS Name") {
                 $("#wallet-container").show();
                 $("#classic-container").hide();
@@ -551,7 +552,7 @@ RED.nodes.registerType("oracle-server", {
     },
     oneditsave: function () {
         // Coerce select-string back to boolean so the runtime sees a real bool.
-        var v = String($("#node-config-input-usethickmode").val());
+        const v = String($("#node-config-input-usethickmode").val());
         this.usethickmode = (v === "true");
         if (this._stopStatsTimer)
             this._stopStatsTimer();
@@ -561,7 +562,8 @@ RED.nodes.registerType("oracle-server", {
             this._stopStatsTimer();
     }
 });
-
+//# sourceMappingURL=oracle-server.js.map
+"use strict";
 //
 // -- oracledb -------------------------------------------------------------------------------------
 //
@@ -601,8 +603,8 @@ RED.nodes.registerType("oracledb", {
     },
     oneditprepare: function () {
         // use query editor
-        var queryField = $("#node-input-query");
-        var queryEditor = RED.editor.createEditor({
+        const queryField = $("#node-input-query");
+        const queryEditor = RED.editor.createEditor({
             id: "node-input-query-editor",
             mode: "ace/mode/sql", // unfortunately not yet included in the node-red version of ace
             value: queryField.val()
@@ -611,8 +613,8 @@ RED.nodes.registerType("oracledb", {
             queryField.val(queryEditor.getSession().getValue());
         });
         // use mappings editor
-        var mappingsField = $("#node-input-mappings");
-        var mappingsEditor = RED.editor.createEditor({
+        const mappingsField = $("#node-input-mappings");
+        const mappingsEditor = RED.editor.createEditor({
             id: "node-input-mappings-editor",
             mode: "ace/mode/json",
             value: mappingsField.val()
@@ -620,8 +622,8 @@ RED.nodes.registerType("oracledb", {
         mappingsEditor.getSession().on("change", function () {
             mappingsField.val(mappingsEditor.getSession().getValue());
         });
-        var visibleTab = "query";
-        var tabs = RED.tabs.create({
+        let visibleTab = "query";
+        const tabs = RED.tabs.create({
             id: "node-input-oracle-out-tabs",
             onchange: function (tab) {
                 $("#node-input-oracle-out-tabs-content").children().hide();
@@ -656,14 +658,14 @@ RED.nodes.registerType("oracledb", {
         });
         setTimeout(function () { tabs.resize(); }, 0);
         // resize editor areas to fit the edit window
-        var functionDialogResize = function () {
-            var height = $("#dialog-form").height();
+        const functionDialogResize = () => {
+            let height = $("#dialog-form").height();
             height -= $("#node-input-oracle-out-tabs").outerHeight(true);
-            var rows = $("#oracle-out-tab-" + visibleTab + ">div:not(.node-input-" + visibleTab + "-text-editor-row)");
-            for (var i = 0; i < rows.length; i++) {
+            const rows = $("#oracle-out-tab-" + visibleTab + ">div:not(.node-input-" + visibleTab + "-text-editor-row)");
+            for (let i = 0; i < rows.length; i++) {
                 height -= $(rows[i]).outerHeight(true);
             }
-            var editorRow = $("#dialog-form>div.node-input-" + visibleTab + "-text-editor-row");
+            const editorRow = $("#dialog-form>div.node-input-" + visibleTab + "-text-editor-row");
             if (editorRow.css("marginTop")) {
                 height -= parseInt(editorRow.css("marginTop"), 10);
             }
@@ -679,20 +681,20 @@ RED.nodes.registerType("oracledb", {
                 mappingsEditor.resize();
             }
         };
-        var d = $("#dialog");
+        const d = $("#dialog");
         d.on("dialogresize", functionDialogResize);
-        d.one("dialogopen", function () {
-            var size = d.dialog("option", "sizeCache-function");
+        d.one("dialogopen", () => {
+            const size = d.dialog("option", "sizeCache-function");
             if (size) {
                 d.dialog("option", "width", size.width);
                 d.dialog("option", "height", size.height);
                 functionDialogResize();
             }
         });
-        d.one("dialogclose", function () {
+        d.one("dialogclose", () => {
             d.off("dialogresize", functionDialogResize);
         });
     }
 });
-
+//# sourceMappingURL=oracledb.js.map
 </script>

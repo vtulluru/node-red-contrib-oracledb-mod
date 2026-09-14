@@ -1,11 +1,14 @@
 {
     "name": "node-red-contrib-oracledb-mod",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "Node-RED oracle database nodes",
     "author": "Original Author: Ab Reitsma, Mod-version Maintainer: Vinay Tulluru",
     "license": "MIT",
     "main": "index.js",
     "scripts": {
+        "build": "gulp build",
+        "compile": "gulp compile",
+        "lint": "gulp lint",
         "test": "gulp test"
     },
     "node-red": {
@@ -15,7 +18,7 @@
         }
     },
     "engines": {
-        "node": ">=18.0.0"
+        "node": ">=20.0.0"
     },
     "keywords": [
         "node-red",
@@ -42,29 +45,30 @@
     "homepage": "https://github.com/vtulluru/node-red-contrib-oracledb-mod#readme",
     "dependencies": {
         "object-resolve-path": "^1.1.1",
-        "oracledb": "^6.10.0"
+        "oracledb": "^7.0.1"
     },
     "devDependencies": {
-        "@eslint/js": "^9.39.4",
-        "@types/jquery": "^3.5.34",
+        "@eslint/js": "^10.0.1",
+        "@types/jquery": "^4.0.1",
         "@types/mocha": "^10.0.10",
-        "@typescript-eslint/eslint-plugin": "^8.59.2",
-        "@typescript-eslint/parser": "^8.59.2",
-        "chai": "^4.5.0",
+        "@types/node": "^26.5.1",
+        "@typescript-eslint/eslint-plugin": "^8.70.0",
+        "@typescript-eslint/parser": "^8.70.0",
+        "@typescript/native": "npm:typescript@^7.0.2",
+        "chai": "^6.2.2",
         "del": "^8.0.1",
         "dotenv": "^17.4.2",
-        "eslint": "^8.57.1",
+        "eslint": "^10.10.0",
         "gulp": "^5.0.1",
-        "gulp-add-src": "^1.0.0",
         "gulp-cli": "^3.1.0",
         "gulp-concat": "^2.6.1",
-        "gulp-eslint-new": "^2.6.2",
         "gulp-rename": "^2.1.0",
-        "gulp-sourcemaps": "^3.0.0",
-        "gulp-spawn-mocha": "^6.0.0",
-        "gulp-typescript": "^5.0.1",
         "merge2": "^1.4.1",
+        "mocha": "^12.0.1",
         "source-map-support": "^0.5.21",
-        "typescript": "~5.9.0"
+        "typescript": "npm:@typescript/typescript6@^6.0.2"
+    },
+    "overrides": {
+        "typescript": "$typescript"
     }
 }
